@@ -523,9 +523,10 @@ def run_dxc():
         if result.returncode == 0:
             opcode = extract_opcode(result.stdout)
             if (opcode == None):
-                continue
-            opcode = int(opcode)
-            intrinsic_to_opcode[hl_op_name] = opcode
+                intrinsic_to_opcode[hl_op_name] = -1
+            else:
+                opcode = int(opcode)
+                intrinsic_to_opcode[hl_op_name] = opcode
         else:
             fail_list.append(hl_op_name)
     
@@ -580,21 +581,28 @@ def hlsl_shader_model_helper(dxc_sm, doc_sm):
         return dxc_shader_model_helper(dxc_sm)
     return doc_sm
 
-def gen_csv_data():
+def hlsl_docs_helper(hlsl_intrinsic_doc_dict, intrinsic_name):
+    if intrinsic_name and intrinsic_name[-1].isdigit():
+        intrinsic_name = intrinsic_name[:-1]
+    return hlsl_intrinsic_doc_dict[intrinsic_name] if intrinsic_name in hlsl_intrinsic_doc_dict else ["",""]
+
+def gen_csv_data_base(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_intrinsic_doc_dict):
     data = [
     ['HLSL Intrinsic', 'DXIL Opcode', 'DXIL OpName', "Shader Model", "Shader Model DXC", "Shader Stages", "DXIL Docs", "HLSL Docs"]
     ]
+    
+    for key, value in hlsl_to_dxil_op.items():
+        dxil_docs = dxil_op_to_docs[value] if value != -1 else ["","","",""]
+        hlsl_docs = hlsl_docs_helper(hlsl_intrinsic_doc_dict, key)
+        row = [key, value, dxil_docs[0], hlsl_shader_model_helper(dxil_docs[1],hlsl_docs[1]), dxc_shader_model_helper(dxil_docs[1]), dxil_docs[2], dxil_docs[3], hlsl_docs[0]]
+        data.append(row)
+    return data
+
+def gen_csv_data():
     hlsl_to_dxil_op = run_dxc()
     dxil_op_to_docs = query_dxil()
     hlsl_intrinsic_doc_dict = md_table_to_dict(full_md_filepath)
-
-    for key, value in hlsl_to_dxil_op.items():
-        dxil_docs = dxil_op_to_docs[value]
-        hlsl_docs = hlsl_intrinsic_doc_dict[key] if key in hlsl_intrinsic_doc_dict else ["",""]
-        row = [key, value, dxil_docs[0], hlsl_shader_model_helper(dxil_docs[1],hlsl_docs[1]), dxc_shader_model_helper(dxil_docs[1]), dxil_docs[2], dxil_docs[3], hlsl_docs[0]]
-        data.append(row)
-    
-    return data
+    return gen_csv_data_base(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_intrinsic_doc_dict)
 
 def gen_csv(csv_file_path : str):
     data = gen_csv_data()
@@ -608,7 +616,25 @@ def gen_csv(csv_file_path : str):
 # opcode = extract_opcode(line)
 # print(opcode)  # Output: 56
 
+def get_missing_opcodes_from_docs(hlsl_to_dxil_op, dxil_op_to_docs):
+    copied_dxil_op_to_docs = dxil_op_to_docs.copy()
+    for key, value in hlsl_to_dxil_op.items():
+        if value in copied_dxil_op_to_docs:
+            del copied_dxil_op_to_docs[value]
+    return copied_dxil_op_to_docs
 
+def gen_remaining_opcode_data(hlsl_to_dxil_op, dxil_op_to_docs):
+    opcode_count = len(dxil_op_to_docs)
+    rem_opcodes = get_missing_opcodes_from_docs(hlsl_to_dxil_op, dxil_op_to_docs)
+    data = [
+    ['DXIL Opcode', 'DXIL OpName', "Shader Model DXC", "Shader Stages", "DXIL Docs"]
+    ]
+    for key, value in rem_opcodes.items():
+        row = [key, value[0], dxc_shader_model_helper(value[1]), value[2], value[3]]
+        data.append(row)
+    return data
+    
+    
 def main():
     """ Main function used for setting up the cli"""
     global isCli_print
