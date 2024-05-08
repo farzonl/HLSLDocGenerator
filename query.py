@@ -1,3 +1,4 @@
+from enum import Enum
 import pypandoc
 from bs4 import BeautifulSoup
 import os
@@ -27,7 +28,10 @@ deprecated_intrinsics = ["abort", "determinant", "sincos", "source_mark",
                          "texCUBE", "texCUBEbias", "texCUBEgrad", "texCUBElod", 
                          "texCUBEproj", "transpose"]
 
-pixel_intrinsics = ["GetRenderTargetSampleCount", "GetRenderTargetSamplePosition", "clip"]
+pixel_intrinsics = ["GetRenderTargetSampleCount", "GetRenderTargetSamplePosition", "clip", "GetAttributeAtVertex", 
+                    "CheckAccessFullyMapped", "EvaluateAttributeAtSample", "EvaluateAttributeCentroid", "EvaluateAttributeSnapped"]
+
+pixel_intrinsics_special = ["EvaluateAttributeAtSample", "EvaluateAttributeCentroid", "EvaluateAttributeSnapped"]
 
 any_hit_intrinsics = ["IgnoreHit", "AcceptHitAndEndSearch"]
 
@@ -45,11 +49,25 @@ hull_intrinsics = ['Process2DQuadTessFactorsAvg', 'Process2DQuadTessFactorsMax',
 
 const_intrinsitcs = ["Barrier"]
 
-no_export = ["TraceRay","EvaluateAttributeAtSample", "EvaluateAttributeCentroid", "EvaluateAttributeSnapped", "GetAttributeAtVertex"]
+raygeneration_intrinsics = ["TraceRay"]
 
+intrinsic_to_dxil_map = {"TraceRay": "traceRay",
+                         "InterlockedExchange" : "atomicBinOp",
+                         "InterlockedAnd" : "annotateHandle"
+                        }
+
+# docs say these are numeric, but they are not
+float_only_intrinsics = ['asfloat16', 'asint16', 'asuint16', 'dst', 'EvaluateAttributeAtSample', 'EvaluateAttributeCentroid', 'EvaluateAttributeSnapped']
 DXC_PATH = os.path.join(pathlib.Path().resolve(),"DXC_Debug_BUILD/bin/dxc")
 
 isCli_print = False
+
+class TypeIndex(Enum):
+    FloatType = 0
+    UnsignedType = 1
+    SignedType = 2
+
+type_qualifer_arr = ['f', 'u', 'i']
 
 def print_cli(*args, **kwargs):
     global isCli_print
@@ -91,23 +109,34 @@ def md_table_to_dict(md_file):
     return data
 
 
-def extract_opcode(line):
+def extract_opcode(hl_op_name, line):
     match = re.search(r'@dx\.op\..*\(i32\s*(?P<int_opcode>\d+)', line)
+    if hl_op_name in intrinsic_to_dxil_map:
+        match = re.search(r'@dx\.op\.' + intrinsic_to_dxil_map[hl_op_name] +r'.*\(i32\s*(?P<int_opcode>\d+)', line)
     if match:
         return int(match.group('int_opcode'))
     else:
         return None
 
-
-def get_valid_type(type_name):
+def get_valid_type(type_name: str, type_index : TypeIndex = TypeIndex.FloatType):
     type_name = type_name.strip()
     if (type_name == "numeric<4>" or type_name == "numeric<c>"
-        or type_name == "numeric<>" or type_name == "float_like<c>"
-        or type_name == "float<>" or type_name == "float<4>"
-        or type_name == "any<>" or type_name == "float_like<4>"
-        or type_name == "float_like<>" or type_name == "any_float<>"
+        or type_name == "numeric<>" or type_name == "any<>"
         or type_name == "any_sampler" or type_name == "numeric<c2>"
         or type_name == "numeric<r>"):
+        return ["float4", "uint4", "int4"][type_index.value]
+    if type_name == "numeric" or type_name == "numeric32_only<>":
+        return ["float", "uint", "int"][type_index.value]
+    if (type_name == "numeric<r2@c2>" or type_name == "numeric<c2@r2>"
+        or type_name == "numeric<r@c>" or type_name == "numeric<c@r>"
+        or type_name == "numeric<c@c2>" or type_name == "numeric<r@r2>"
+        or type_name == "numeric<r@c2>" or type_name == "numeric<c@r2>"):
+        return ["float4x4", "uint4x4", "int4x4"][type_index.value]
+    if(type_name == "numeric16_only<>"):
+        return ["half4", "uint16_4", "int16_4"][type_index.value]
+    if (type_name == "float_like<c>" or type_name == "float_like<4>"
+        or type_name == "float<>" or type_name == "float<4>"
+        or type_name == "float_like<>" or type_name == "any_float<>"):
         return "float4"
     if type_name == "float<3>" or type_name == "float_like<3>":
         return "float3"
@@ -141,8 +170,8 @@ def get_valid_type(type_name):
     if type_name == "uint<2>":
         return "uint2"
     if (type_name == "int<>" or type_name == "int<4>" 
-        or type_name == "numeric32_only<>" or type_name == "any_int<>"
-        or type_name == "sint16or32_only<4>" or type_name == "any_int16or32<4>"):
+        or type_name == "any_int<>" or type_name == "sint16or32_only<4>"
+        or type_name == "any_int16or32<4>"):
         return "int4"
     if type_name == "p32i8":
         return "int8_t4_packed"
@@ -152,8 +181,7 @@ def get_valid_type(type_name):
         return "int3"
     if type_name == "int<2>":
         return "int2"
-    if (type_name == "int16_t<4>" or type_name == "numeric16_only<>"
-        or type_name == "int16_t<>"):
+    if (type_name == "int16_t<4>" or type_name == "int16_t<>"):
         return "int16_t4"
     if type_name == "int16_t<3>":
         return "int16_t3"
@@ -165,7 +193,7 @@ def get_valid_type(type_name):
         return "uint16_t3"
     if type_name == "uint16_t<2>":
         return "uint16_t2"
-    if (type_name == "numeric" or type_name == "float_like" 
+    if (type_name == "float_like" 
         or type_name == "float<1>" or type_name == "float32_only"):
         return "float"
     if type_name == "u64":
@@ -186,11 +214,6 @@ def get_valid_type(type_name):
         return "int64_t3"
     if type_name == "int64_t<2>":
         return "int64_t2"
-    if (type_name == "numeric<r2@c2>" or type_name == "numeric<c2@r2>"
-        or type_name == "numeric<r@c>" or type_name == "numeric<c@r>"
-        or type_name == "numeric<c@c2>" or type_name == "numeric<r@r2>"
-        or type_name == "numeric<r@c2>" or type_name == "numeric<c@r2>"):
-        return "float4x4"
     if type_name == "float<3@4>":
         return "float3x4"
     if type_name == "float<4@3>":
@@ -209,13 +232,13 @@ def get_valid_type(type_name):
         or type_name == "float" or type_name == "uint" or type_name == "string"):
         return type_name
 
-def generate_interlocked(scratchpad, func_name, params):
-    code_body = f"RWStructuredBuffer<{get_valid_type(params[1].type_name)}> buffer : register(u0);\n[numthreads(1, 1, 1)]\n"
+def generate_interlocked(scratchpad, func_name, params, type_index : TypeIndex):
+    code_body = f"RWStructuredBuffer<{get_valid_type(params[1].type_name, type_index)}> buffer : register(u0);\n[numthreads(1, 1, 1)]\n"
     return_type = params[0].type_name
-    code_body += f"export {get_valid_type(return_type)} fn(uint3 dispatchThreadID : SV_DispatchThreadID, "
+    code_body += f"export {get_valid_type(return_type, type_index)} fn(uint3 dispatchThreadID : SV_DispatchThreadID, "
     arg_length = len(params) -1
     for i in range(1, arg_length):
-        code_body += f"{get_valid_type(params[i].type_name)} p{i}, "
+        code_body += f"{get_valid_type(params[i].type_name, type_index)} p{i}, "
     code_body = code_body.rstrip(", ") + ") {\nint index = dispatchThreadID.x;"
 
     # Define the function call
@@ -230,10 +253,10 @@ def generate_interlocked(scratchpad, func_name, params):
     with open(scratchpad, "w") as file:
         file.write(payload)
 
-def generate_node(scratchpad, func_name, params):
+def generate_node(scratchpad, func_name, params, type_index : TypeIndex):
     return_type = params[0].type_name
     arg_length = len(params)
-    buffer = f"RWBuffer<{get_valid_type(return_type)}> buf0;\n"
+    buffer = f"RWBuffer<{get_valid_type(return_type, type_index)}> buf0;\n"
     fn_header = '[shader("node")]\n[NodeDispatchGrid(1, 1, 1)]\n[numthreads(1, 1, 1)]\nvoid fn() {\n'
     
     # Define the function call
@@ -248,7 +271,7 @@ def generate_node(scratchpad, func_name, params):
     with open(scratchpad, "w") as file:
         file.write(payload)
 
-def generate_anyhit(scratchpad, func_name, params):
+def generate_anyhit(scratchpad, func_name, params, type_index : TypeIndex):
     raypayload = 'struct [raypayload] RayPayload\n{\n\tfloat4 color : write(caller) : read(anyhit);\n\tfloat distance : write(caller) : read(anyhit);\n};\n'
     attributes = 'struct Attributes {\n\tfloat3 barycentrics;\n\tuint primitiveIndex;\n};\n'
     shader_header ='[shader("anyhit")]\nexport void fn(inout RayPayload payload, in Attributes attributes) {\n'
@@ -266,14 +289,14 @@ def generate_anyhit(scratchpad, func_name, params):
     with open(scratchpad, "w") as file:
         file.write(payload)
 
-def generate_mesh(scratchpad, func_name, params):
+def generate_mesh(scratchpad, func_name, params, type_index : TypeIndex):
     fn_attr = '[numthreads(1, 1, 1)]\n[outputtopology("triangle")]\n[shader("mesh")]'
     fn_sig =  'void fn(in uint gi : SV_GroupIndex, in uint vi : SV_ViewID) {\n'
     arg_length = len(params)
 
     func_call = f"{func_name}("
     for i in range(1, arg_length):
-        type_name = get_valid_type(params[i].type_name)
+        type_name = get_valid_type(params[i].type_name, type_index)
         type_val = int(1) 
         if type_name == 'float' or type_name == 'double' or type_name == 'half':
             type_val = float(1.0)
@@ -287,7 +310,7 @@ def generate_mesh(scratchpad, func_name, params):
         file.write(payload)
 
 
-def generate_amplification(scratchpad, func_name, params):
+def generate_amplification(scratchpad, func_name, params, type_index : TypeIndex):
     fn_attr = '[numthreads(1, 1, 1)]\n[shader("amplification")]'
     fn_sig =  'export void fn(uint gtid : SV_GroupIndex) {\n'
     rayPayload = "struct RayPayload\n{\n\tfloat4 color;\n\tfloat distance;\n};"
@@ -295,7 +318,7 @@ def generate_amplification(scratchpad, func_name, params):
     arg_length = len(params)
     arg_list = ""
     for i in range(1, arg_length):
-        arg_type = get_valid_type(params[i].type_name)
+        arg_type = get_valid_type(params[i].type_name, type_index)
         if not rayPayloadInserted and arg_type == "RayPayload":
             arg_list = rayPayload +"\n" + arg_list
         arg_list += f"{arg_type} p{i};\n"
@@ -313,29 +336,44 @@ def generate_amplification(scratchpad, func_name, params):
     with open(scratchpad, "w") as file:
         file.write(payload)
 
-def generate_pixel(scratchpad, func_name, params):
+def generate_pixel(scratchpad, func_name, params, type_index : TypeIndex):
     fn_attr = '[numthreads(1, 1, 1)]\n[shader("pixel")]'
     return_type = params[0].type_name
-    signature = f"{get_valid_type(return_type)} fn() : SV_Target"
-    signature += "{\n"
+    signature = f"{get_valid_type(return_type, type_index)} fn("
+    if func_name == "GetAttributeAtVertex":
+        signature += f"nointerpolation {get_valid_type(params[1].type_name)} p1 : COLOR"
+    if func_name in pixel_intrinsics_special:
+        signature += f"{get_valid_type(params[1].type_name, type_index)} p1 : COLOR"
+    signature += " ) : SV_Target {\n"
     arg_length = len(params)
-    for i in range(1, arg_length):
-        arg_type = get_valid_type(params[i].type_name)    
-        signature += f"{arg_type} p{i};\n"
+    if func_name == "GetAttributeAtVertex":
+        type_name = params[2].type_name
+        type_val = int(1) 
+        if type_name == 'float' or type_name == 'double' or type_name == 'half':
+            type_val = float(1.0)
+        arg_type = get_valid_type(type_name, type_index)
+        signature += f"\t{arg_type} p{2} = {type_val};"
+    else:
+        index_start = 1
+        if func_name in pixel_intrinsics_special:
+            index_start = 2
+        for i in range(index_start, arg_length):
+            arg_type = get_valid_type(params[i].type_name, type_index)    
+            signature += f"\t{arg_type} p{i};"
 
     # Define the function call
-    func_call = f"return {func_name}("
+    func_call = f"\treturn {func_name}("
     for i in range(1, arg_length):
         func_call += f"p{i}, "
     func_call = func_call.rstrip(", ") + ");\n}"
 
     # Generate the payload
-    payload = f"{fn_attr}\n{signature}\n    {func_call}"
+    payload = f"{fn_attr}\n{signature}\n{func_call}"
     # Write the payload to a file
     with open(scratchpad, "w") as file:
         file.write(payload)
 
-def generate_hull(scratchpad, func_name, params):
+def generate_hull(scratchpad, func_name, params, type_index : TypeIndex):
     hs_per_patch_data = 'struct HSPerPatchData\n{\n\tfloat edges[ 3 ] : SV_TessFactor;\n\tfloat inside : SV_InsideTessFactor;\n};\n'
     ps_scene_in = 'struct PSSceneIn {\n\t float4 pos : SV_Position;\n\tfloat2 tex : TEXCOORD0;\n\tfloat3 norm : NORMAL;\n};\n'
     hs_per_vertex_data = 'struct HSPerVertexData {\n\tPSSceneIn v;\n};\n'
@@ -350,7 +388,7 @@ def generate_hull(scratchpad, func_name, params):
     arg_length = len(params)
     fn_args = ""
     for i in range(1, arg_length):
-        arg_type = get_valid_type(params[i].type_name)    
+        arg_type = get_valid_type(params[i].type_name, type_index)    
         fn_args += f"{arg_type} p{i};\n"
     
     func_call = f"{func_name}("
@@ -364,38 +402,58 @@ def generate_hull(scratchpad, func_name, params):
     with open(scratchpad, "w") as file:
         file.write(payload)
 
+def generate_raygeneration(scratchpad, func_name, params, type_index : TypeIndex):
 
-def generate_scratch_file(scratchpad, func_name, params):
+    raypayload = 'struct [raypayload] RayPayload\n{\n\tfloat4 color : write(caller) : read(closesthit);\n\tfloat distance : write(caller) : read(closesthit);\n};\n'
+    shader_header ='[shader("raygeneration")]\nvoid fn() {'
+
+    arg_length = len(params)
+    fn_args = ""
+    for i in range(1, arg_length):
+        arg_type = get_valid_type(params[i].type_name, type_index)    
+        fn_args += f"\t{arg_type} p{i};\n"
+
+    func_call = f"\t{func_name}("
+    for i in range(1, arg_length):
+        func_call += f"p{i}, "
+    func_call = func_call.rstrip(", ") + ");\n}"
+
+    payload = f"{raypayload}\n{shader_header}\n{fn_args}{func_call}"
+    # Write the payload to a file
+    with open(scratchpad, "w") as file:
+        file.write(payload)
+
+def generate_scratch_file(scratchpad, func_name : str, params, type_index : TypeIndex = TypeIndex.FloatType):
     # Define the function signature
     if func_name.startswith("Interlocked"):
-        generate_interlocked(scratchpad, func_name, params)
+        generate_interlocked(scratchpad, func_name, params, type_index)
         return
     if func_name in any_hit_intrinsics:
-        generate_anyhit(scratchpad, func_name, params)
+        generate_anyhit(scratchpad, func_name, params, type_index)
         return
     if func_name in node_intrinsics:
-        generate_node(scratchpad, func_name, params)
+        generate_node(scratchpad, func_name, params, type_index)
         return
     if func_name in mesh_intrinsics:
-        generate_mesh(scratchpad, func_name, params)
+        generate_mesh(scratchpad, func_name, params, type_index)
         return 
     if func_name in amplification_intrinsics:
-        generate_amplification(scratchpad, func_name, params)
+        generate_amplification(scratchpad, func_name, params, type_index)
         return 
     if func_name in pixel_intrinsics:
-        generate_pixel(scratchpad, func_name, params)
+        generate_pixel(scratchpad, func_name, params, type_index)
         return 
     if func_name in hull_intrinsics:
-        generate_hull(scratchpad, func_name, params)
+        generate_hull(scratchpad, func_name, params, type_index)
+        return
+    if func_name in raygeneration_intrinsics:
+        generate_raygeneration(scratchpad, func_name, params, type_index)
         return
 
     rayPayload = "struct RayPayload\n{\n\tfloat4 color;\n\tfloat distance;\n};"
     rayPayloadInserted = False
     return_type = params[0].type_name
-    if(func_name in no_export ):
-        signature = f"{get_valid_type(return_type)} fn("
-    else:
-        signature = f"export {get_valid_type(return_type)} fn("
+    signature = f"export {get_valid_type(return_type, type_index)} fn("
     arg_length = len(params)
     if func_name == "printf":
         arg_length = arg_length -1
@@ -406,11 +464,11 @@ def generate_scratch_file(scratchpad, func_name, params):
             type_val = int(1) 
             if type_name == 'float' or type_name == 'double' or type_name == 'half':
                 type_val = float(1.0)
-            arg_type = get_valid_type(type_name)
+            arg_type = get_valid_type(type_name, type_index)
             signature += f"\t{arg_type} p{i} = {type_val};\n"
     else:
         for i in range(1, arg_length):
-            arg_type = get_valid_type(params[i].type_name)
+            arg_type = get_valid_type(params[i].type_name, type_index)
             if not rayPayloadInserted and arg_type == "RayPayload":
                 signature = rayPayload +"\n" + signature
             signature += f"{arg_type} p{i}, "
@@ -487,6 +545,45 @@ def build_dxc(rebuild: bool = False):
         print(result.stderr)
         #printverbose(result.stdout)
 
+def get_unique_name(hl_op, name_count) -> str:
+    if hl_op.name in name_count:
+        name_count[hl_op.name] = name_count[hl_op.name] + 1
+    else:
+        name_count[hl_op.name] = 0
+    return f"{hl_op.name}{'' if name_count[hl_op.name] == 0 else f'_{name_count[hl_op.name]}'}"
+
+def check_for_numeric_params(hl_op):
+    numeric_found = False
+    for param in hl_op.params:
+        type_name = param.type_name
+        if(type_name.startswith("numeric")):
+            numeric_found = True
+            break
+    return numeric_found
+
+def run_hlsl_test(dxc_command, hlsl_name, hlsl_construct_to_opcode, fail_list):
+    result = subprocess.run(dxc_command, capture_output=True, text=True)
+    if result.returncode == 0:
+        opcode = extract_opcode(hlsl_name, result.stdout)
+        if (opcode == None):
+            hlsl_construct_to_opcode[hlsl_name] = -1
+        else:
+            opcode = int(opcode)
+            hlsl_construct_to_opcode[hlsl_name] = opcode
+    else:
+        fail_list.append(hlsl_name)
+
+def dxc_intrinsic_run_helper(hl_op, dxc_command, scratchpad_path, hl_op_name, intrinsic_to_opcode,
+           fail_list, type_index : TypeIndex = TypeIndex.FloatType):
+    scratchpad = os.path.join(scratchpad_path,  hl_op_name+"_test.hlsl")
+    dxc_command[1] = scratchpad
+    if hl_op.name in hull_intrinsics:
+        dxc_command[2] = "-T hs_6_8"
+    else:
+        dxc_command[2] = "-T lib_6_8"
+    generate_scratch_file(scratchpad, hl_op.name, hl_op.params, type_index)
+    run_hlsl_test(dxc_command, hl_op.name, intrinsic_to_opcode, fail_list)
+
 # Run dxc
 def run_dxc():
     scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
@@ -506,33 +603,20 @@ def run_dxc():
         if (hl_op.ns != "Intrinsics" or hl_op.name in deprecated_intrinsics or
             hl_op.name in hidden_intrinsics):
             continue
-        if hl_op.name in name_count:
-            name_count[hl_op.name] = name_count[hl_op.name] + 1
-        else:
-            name_count[hl_op.name] = 0 
         total_intrinsics = total_intrinsics + 1
-        hl_op_name = f"{hl_op.name}{'' if name_count[hl_op.name] == 0 else name_count[hl_op.name]}"
-        scratchpad = os.path.join(scratchpad_path,  hl_op_name+"_test.hlsl")
-        dxc_command[1] = scratchpad
-        if hl_op.name in hull_intrinsics:
-            dxc_command[2] = "-T hs_6_8"
+        hl_op_name = get_unique_name(hl_op,name_count)
+        numeric_found = check_for_numeric_params(hl_op)
+        if numeric_found and hl_op.name not in float_only_intrinsics:
+            for type_index in TypeIndex:
+                dxc_intrinsic_run_helper(hl_op, dxc_command, scratchpad_path, hl_op_name, intrinsic_to_opcode, fail_list, type_index)
+                hl_op_name = get_unique_name(hl_op,name_count)
         else:
-            dxc_command[2] = "-T lib_6_8"
-        generate_scratch_file(scratchpad, hl_op.name, hl_op.params)
-        result = subprocess.run(dxc_command, capture_output=True, text=True)
-        if result.returncode == 0:
-            opcode = extract_opcode(result.stdout)
-            if (opcode == None):
-                intrinsic_to_opcode[hl_op_name] = -1
-            else:
-                opcode = int(opcode)
-                intrinsic_to_opcode[hl_op_name] = opcode
-        else:
-            fail_list.append(hl_op_name)
+            dxc_intrinsic_run_helper(hl_op, dxc_command, scratchpad_path, hl_op_name, intrinsic_to_opcode, fail_list)
     
     print_cli(f"success %: {100.0 * ( (total_intrinsics - len(fail_list)) / total_intrinsics)}")
-    print_cli("FAILED:")
-    print_cli(fail_list)
+    if(len(fail_list) > 0):
+        print_cli("FAILED:")
+        print_cli(fail_list)
     return intrinsic_to_opcode
 
 def formatShaderModel(smodel):
@@ -623,9 +707,11 @@ def get_missing_opcodes_from_docs(hlsl_to_dxil_op, dxil_op_to_docs):
             del copied_dxil_op_to_docs[value]
     return copied_dxil_op_to_docs
 
-def gen_remaining_opcode_data(hlsl_to_dxil_op, dxil_op_to_docs):
+def gen_remaining_opcode_data(hlsl_to_dxil_op, dxil_op_to_docs, semantic_to_dxil_op=None):
     opcode_count = len(dxil_op_to_docs)
     rem_opcodes = get_missing_opcodes_from_docs(hlsl_to_dxil_op, dxil_op_to_docs)
+    if semantic_to_dxil_op:
+        rem_opcodes = get_missing_opcodes_from_docs(semantic_to_dxil_op, rem_opcodes)
     data = [
     ['DXIL Opcode', 'DXIL OpName', "Shader Model DXC", "Shader Stages", "DXIL Docs"]
     ]
@@ -633,7 +719,58 @@ def gen_remaining_opcode_data(hlsl_to_dxil_op, dxil_op_to_docs):
         row = [key, value[0], dxc_shader_model_helper(value[1]), value[2], value[3]]
         data.append(row)
     return data
-    
+
+def gen_arg_semantics(argSemantic : str, scratchpad : str):
+    fn_datastruct = 'RWStructuredBuffer<float> buffer : register(u0);\n\n'
+    fn_attr = '[numthreads(1, 1, 1)]\n[outputtopology("triangle")]\n[shader("mesh")]'
+    if argSemantic == "SV_ViewID":
+        fn_attr = '[shader("pixel")]'
+    fn_sig  = f'void fn2(uint index : {argSemantic}) ' 
+    fn_body = '{\n\tbuffer[index] = 1;\n}'
+    # Generate the payload
+    payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
+    # Write the payload to a file
+    with open(scratchpad, "w") as file:
+        file.write(payload)
+
+def gen_semantics_hlsl():
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    dxc_command = [
+        DXC_PATH,
+        "<scratchpad_placholder>",
+        "-T lib_6_8",
+        "-enable-16bit-types"
+    ]
+    semantics = db_dxil.enums[0]
+    for enum in db_dxil.enums:
+        if "SemanticKind" == enum.name:
+            semantics = enum
+    semanticsArgsMap = {
+        "DispatchThreadID": "SV_DispatchThreadID",
+        "GroupID" : "SV_GroupID",
+        "GroupIndex" : "SV_GroupIndex",
+        "GroupThreadID" : "SV_GroupThreadID", 
+        "ViewID": "SV_ViewID",
+    }
+    semantic_to_opcode = {}
+    fail_list = []
+    for semantic in semantics.values:
+        if semantic.name in semanticsArgsMap:
+            scratchpad = os.path.join(scratchpad_path,  semantic.name +"_test.hlsl")
+            dxc_command[1] = scratchpad
+            hlsl_name = semanticsArgsMap[semantic.name]
+            gen_arg_semantics(hlsl_name, scratchpad)
+            run_hlsl_test(dxc_command, hlsl_name, semantic_to_opcode, fail_list)
+    if(len(fail_list) > 0):
+        print_cli("FAILED:")
+        print_cli(fail_list)
+    else:
+        print(semantic_to_opcode)
+    return semantic_to_opcode
+
+
+
     
 def main():
     """ Main function used for setting up the cli"""
@@ -649,9 +786,13 @@ def main():
     if args.query_unique_types:
         get_all_types()
         return 0
-    if args.gen_dxc_tests:
+    if args.gen_intrinsic_tests:
         isCli_print = True
         run_dxc()
+        return 0
+    if args.gen_semantic_tests:
+        isCli_print = True
+        gen_semantics_hlsl()
         return 0
     if args.query_all_dxil:
         isCli_print = True
