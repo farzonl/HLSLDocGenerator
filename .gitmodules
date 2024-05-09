@@ -4,3 +4,6 @@
 [submodule "win32"]
 	path = win32
 	url = https://github.com/farzonl/win32.git
+[submodule "llvm-project"]
+	path = llvm-project
+	url = https://github.com/llvm/llvm-project.git
