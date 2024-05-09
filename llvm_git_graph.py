@@ -58,12 +58,18 @@ def extract_all_opcodes(text):
        return matches
     return []
 
+def find_functions(function_name, text):
+        # Construct the regular expression pattern dynamically
+        pattern = r'\b{}\s*\(\s*([^)]*)\s*\);'.format(re.escape(function_name))
+        match = re.search(pattern, text)
+        return match
+
 def extract_all_hlsl_intrinsics(text):
     hlsl_intrinsics = all_hlsl_intrinsic
     found_intrinsics = []
     for intrinsic in hlsl_intrinsics:
         # note: need a better regex here
-        match = re.search(intrinsic, text)
+        match = find_functions(intrinsic, text)
         if match:
             found_intrinsics.append(intrinsic)
     return found_intrinsics
