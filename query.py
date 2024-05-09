@@ -21,6 +21,8 @@ db_hlsl = get_db_hlsl()
 full_md_filepath = os.path.join(pathlib.Path().resolve(),
                                 'win32/desktop-src/direct3dhlsl/dx-graphics-hlsl-intrinsic-functions.md')
 
+shader_semantic_filepath = os.path.join(pathlib.Path().resolve(), 'win32/desktop-src/direct3dhlsl/dx-graphics-hlsl-semantics.md')
+
 deprecated_intrinsics = ["abort", "determinant", "sincos", "source_mark", 
                          "tex1D", "tex1Dbias", "tex1Dgrad", "tex1Dlod", "tex1Dproj", 
                          "tex2D", "tex2Dbias", "tex2Dgrad", "tex2Dlod", "tex2Dproj", 
@@ -67,6 +69,11 @@ class TypeIndex(Enum):
     UnsignedType = 1
     SignedType = 2
 
+class VecLength(Enum):
+    Vec2 = 2
+    Vec3 = 3
+    Vec4 = 4
+
 type_qualifer_arr = ['f', 'u', 'i']
 
 def print_cli(*args, **kwargs):
@@ -76,7 +83,7 @@ def print_cli(*args, **kwargs):
 
 def md_table_to_dict(md_file):
     html_content = pypandoc.convert_file(
-        full_md_filepath,
+        md_file,
         "html",
         format="markdown",
         extra_args=["--standalone"])
@@ -87,7 +94,7 @@ def md_table_to_dict(md_file):
     table = soup.find('table')
 
     # Extracting headers
-    headers = [header.get_text() for header in table.find_all('th')]
+    headers = [header.get_text(strip=True) for header in table.find_all('th')]
     name_index = headers.index('Name')
     desc_index = headers.index('Description')
     shader_index = headers.index('Minimum shader model')
@@ -96,14 +103,14 @@ def md_table_to_dict(md_file):
     data = {}
     for row in table.find_all('tr')[1:]:
         cells = row.find_all('td')
-        name = cells[name_index].get_text()
-        description = cells[desc_index].get_text()
+        name = cells[name_index].get_text(strip=True)
+        description = cells[desc_index].get_text(strip=True)
         # shaders only went from 1-5 before DXC
         # after is 6.0-6.8
         # this modification lets us drop the superscrpt
-        shader_version = cells[shader_index].get_text()
+        shader_version = cells[shader_index].get_text(strip=True)
         if(len(shader_version) > 1 and shader_version[1] != '.'):
-            shader_version = cells[shader_index].get_text()[0]
+            shader_version = cells[shader_index].get_text(strip=True)[0]
         data[name] = [description, shader_version]
 
     return data
@@ -118,8 +125,12 @@ def extract_opcode(hl_op_name, line):
     else:
         return None
 
-def get_valid_type(type_name: str, type_index : TypeIndex = TypeIndex.FloatType):
+def get_valid_type(type_name: str, type_index : TypeIndex = TypeIndex.FloatType, 
+                   vec_length : VecLength = VecLength.Vec4):
     type_name = type_name.strip()
+    # case to handle dot2,dot3, dot4
+    if type_index == TypeIndex.FloatType and type_name == "numeric<c>":
+        return {2: "float2", 3: "float3", 4: "float4" }[vec_length.value]
     if (type_name == "numeric<4>" or type_name == "numeric<c>"
         or type_name == "numeric<>" or type_name == "any<>"
         or type_name == "any_sampler" or type_name == "numeric<c2>"
@@ -362,9 +373,13 @@ def generate_pixel(scratchpad, func_name, params, type_index : TypeIndex):
             signature += f"\t{arg_type} p{i};"
 
     # Define the function call
-    func_call = f"\treturn {func_name}("
-    for i in range(1, arg_length):
-        func_call += f"p{i}, "
+    func_call = ""
+    if func_name == "clip":
+        func_call = f"\t {func_name}(p1.a"
+    else:
+        func_call = f"\treturn {func_name}("
+        for i in range(1, arg_length):
+            func_call += f"p{i}, "
     func_call = func_call.rstrip(", ") + ");\n}"
 
     # Generate the payload
@@ -423,7 +438,8 @@ def generate_raygeneration(scratchpad, func_name, params, type_index : TypeIndex
     with open(scratchpad, "w") as file:
         file.write(payload)
 
-def generate_scratch_file(scratchpad, func_name : str, params, type_index : TypeIndex = TypeIndex.FloatType):
+def generate_scratch_file(scratchpad, func_name : str, params, type_index : TypeIndex = TypeIndex.FloatType,
+                           vec_length : VecLength = VecLength.Vec4):
     # Define the function signature
     if func_name.startswith("Interlocked"):
         generate_interlocked(scratchpad, func_name, params, type_index)
@@ -468,7 +484,7 @@ def generate_scratch_file(scratchpad, func_name : str, params, type_index : Type
             signature += f"\t{arg_type} p{i} = {type_val};\n"
     else:
         for i in range(1, arg_length):
-            arg_type = get_valid_type(params[i].type_name, type_index)
+            arg_type = get_valid_type(params[i].type_name, type_index, vec_length)
             if not rayPayloadInserted and arg_type == "RayPayload":
                 signature = rayPayload +"\n" + signature
             signature += f"{arg_type} p{i}, "
@@ -574,15 +590,15 @@ def run_hlsl_test(dxc_command, hlsl_name, hlsl_construct_to_opcode, fail_list):
         fail_list.append(hlsl_name)
 
 def dxc_intrinsic_run_helper(hl_op, dxc_command, scratchpad_path, hl_op_name, intrinsic_to_opcode,
-           fail_list, type_index : TypeIndex = TypeIndex.FloatType):
+           fail_list, type_index : TypeIndex = TypeIndex.FloatType, vec_length : VecLength = VecLength.Vec4):
     scratchpad = os.path.join(scratchpad_path,  hl_op_name+"_test.hlsl")
     dxc_command[1] = scratchpad
     if hl_op.name in hull_intrinsics:
         dxc_command[2] = "-T hs_6_8"
     else:
         dxc_command[2] = "-T lib_6_8"
-    generate_scratch_file(scratchpad, hl_op.name, hl_op.params, type_index)
-    run_hlsl_test(dxc_command, hl_op.name, intrinsic_to_opcode, fail_list)
+    generate_scratch_file(scratchpad, hl_op.name, hl_op.params, type_index, vec_length)
+    run_hlsl_test(dxc_command, hl_op_name, intrinsic_to_opcode, fail_list)
 
 # Run dxc
 def run_dxc():
@@ -592,7 +608,8 @@ def run_dxc():
         DXC_PATH,
         "<scratchpad_placholder>",
         "-T lib_6_8",
-        "-enable-16bit-types"
+        "-enable-16bit-types",
+        "-O0"
     ]
 
     intrinsic_to_opcode = {}
@@ -606,8 +623,18 @@ def run_dxc():
         total_intrinsics = total_intrinsics + 1
         hl_op_name = get_unique_name(hl_op,name_count)
         numeric_found = check_for_numeric_params(hl_op)
+        if hl_op.name == "WaveMatch":
+            dxc_command[4] = "-O1"
+        else:
+            dxc_command[4] = "-O0"
+        if numeric_found and hl_op.name == "dot":
+            for vec_len in VecLength:
+                dxc_intrinsic_run_helper(hl_op, dxc_command, scratchpad_path, hl_op_name, intrinsic_to_opcode, fail_list, TypeIndex.FloatType, vec_len)
+                hl_op_name = get_unique_name(hl_op,name_count)
         if numeric_found and hl_op.name not in float_only_intrinsics:
             for type_index in TypeIndex:
+                if hl_op.name == "dot" and type_index == TypeIndex.FloatType:
+                    continue
                 dxc_intrinsic_run_helper(hl_op, dxc_command, scratchpad_path, hl_op_name, intrinsic_to_opcode, fail_list, type_index)
                 hl_op_name = get_unique_name(hl_op,name_count)
         else:
@@ -666,8 +693,7 @@ def hlsl_shader_model_helper(dxc_sm, doc_sm):
     return doc_sm
 
 def hlsl_docs_helper(hlsl_intrinsic_doc_dict, intrinsic_name):
-    if intrinsic_name and intrinsic_name[-1].isdigit():
-        intrinsic_name = intrinsic_name[:-1]
+    intrinsic_name = intrinsic_name.split('_')[0]
     return hlsl_intrinsic_doc_dict[intrinsic_name] if intrinsic_name in hlsl_intrinsic_doc_dict else ["",""]
 
 def gen_csv_data_base(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_intrinsic_doc_dict):
@@ -733,6 +759,73 @@ def gen_arg_semantics(argSemantic : str, scratchpad : str):
     with open(scratchpad, "w") as file:
         file.write(payload)
 
+def shader_semantic_table_to_dict_helper(table, col_name : str):
+    # Extracting headers
+    headers = [header.get_text(strip=True) for header in table.find_all('th')]
+    name_index = headers.index(col_name)
+    desc_index = headers.index('Description')
+    type_index = headers.index('Type')
+
+    # Extracting data
+    data = {}
+    for row in table.find_all('tr')[1:]:
+        cells = row.find_all('td')
+        name = cells[name_index].get_text(strip=True)
+        description = cells[desc_index].get_text(strip=True)
+        semantic_type = cells[type_index].get_text(strip=True)
+        data[name] = [description, semantic_type]
+
+    return data
+
+def shader_semantic_md_table_to_dict(md_file):
+    html_content = pypandoc.convert_file(
+        md_file,
+        "html",
+        format="markdown",
+        extra_args=["--standalone"])
+
+    # print(html_content)
+
+    soup = BeautifulSoup(html_content, 'html.parser')
+    vertex_shader_h3_tag = soup.find('h3', id='vertex-shader-semantics')
+    vertex_semantic_input_table = vertex_shader_h3_tag.find_next_sibling('table')
+    vertex_semantic_output_table = vertex_semantic_input_table.find_next_sibling('table')
+
+    pixel_shader_h3_tag = soup.find('h3', id='pixel-shader-semantics')
+    pixel_semantic_input_table = pixel_shader_h3_tag.find_next_sibling('table')
+    pixel_semantic_output_table = pixel_semantic_input_table.find_next_sibling('table')
+
+    return { 
+        "vertex" :
+        [
+            shader_semantic_table_to_dict_helper(vertex_semantic_input_table, "Input"),
+            shader_semantic_table_to_dict_helper(vertex_semantic_output_table,"Output")
+        ],
+        "pixel" :
+        [
+            shader_semantic_table_to_dict_helper(pixel_semantic_input_table,  "Input"),
+            shader_semantic_table_to_dict_helper(pixel_semantic_output_table, "Output")
+        ]
+    }
+
+def gen_input_semantic_test_case(shader_model : str, type_str, semantic: str):
+    out_put_semantic = 'SV_ClipDistance' if shader_model == 'vertex' else 'SV_Target'
+    retType = type_str
+    if semantic == 'BLENDINDICES':
+        retType = 'float'
+    shader = f'[shader("{shader_model}")]\n {retType} fn({type_str} p0 : {semantic}) : {out_put_semantic}'
+    shader = shader + ' { return p0; }'
+    return shader
+
+def gen_output_semantic_test_case(shader_model : str, type_str, semantic: str):
+    shader = f'[shader("{shader_model}")]\n {type_str} fn({type_str} p0 : COLOR) : {semantic}'
+    shader = shader + ' { return p0; }' 
+    return shader
+
+def write_payload(scratchpad, payload):
+    with open(scratchpad, "w") as file:
+        file.write(payload)
+
 def gen_semantics_hlsl():
     scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
     os.makedirs(scratchpad_path, exist_ok=True)
@@ -740,7 +833,8 @@ def gen_semantics_hlsl():
         DXC_PATH,
         "<scratchpad_placholder>",
         "-T lib_6_8",
-        "-enable-16bit-types"
+        "-enable-16bit-types",
+        "-O0"
     ]
     semantics = db_dxil.enums[0]
     for enum in db_dxil.enums:
@@ -755,6 +849,34 @@ def gen_semantics_hlsl():
     }
     semantic_to_opcode = {}
     fail_list = []
+
+    #ShaderSemantics from docs
+    shader_semantics = shader_semantic_md_table_to_dict(shader_semantic_filepath)
+    for shader_model, semantic_value in shader_semantics.items():
+        input_semantics  = semantic_value[0]
+        output_semantics = semantic_value[1]
+        for semantic_name, semantic_attributes in input_semantics.items():
+            s_name = semantic_name.split('[')[0]
+            s_type = semantic_attributes[1]
+            test_str = gen_input_semantic_test_case(shader_model,s_type,s_name)
+            unique_name = f"{s_name}_{shader_model}_input"
+            scratchpad = os.path.join(scratchpad_path, f"{unique_name}_test.hlsl")
+            dxc_command[1] = scratchpad
+            write_payload(scratchpad, test_str)
+            intrinsic_to_dxil_map[unique_name] = 'loadInput'
+            run_hlsl_test(dxc_command, unique_name, semantic_to_opcode, fail_list)
+    
+        for semantic_name, semantic_attributes in output_semantics.items():
+            s_name = semantic_name.split('[')[0]
+            s_type = semantic_attributes[1]
+            test_str = gen_input_semantic_test_case(shader_model,s_type,s_name)
+            unique_name = f"{s_name}_{shader_model}_output"
+            scratchpad = os.path.join(scratchpad_path, f"{unique_name}_test.hlsl")
+            dxc_command[1] = scratchpad
+            write_payload(scratchpad, test_str)
+            intrinsic_to_dxil_map[unique_name] = 'storeOutput'
+            run_hlsl_test(dxc_command, unique_name, semantic_to_opcode, fail_list)
+
     for semantic in semantics.values:
         if semantic.name in semanticsArgsMap:
             scratchpad = os.path.join(scratchpad_path,  semantic.name +"_test.hlsl")
