@@ -55,7 +55,7 @@ raygeneration_intrinsics = ["TraceRay"]
 
 intrinsic_to_dxil_map = {"TraceRay": "traceRay",
                          "InterlockedExchange" : "atomicBinOp",
-                         "InterlockedAnd" : "annotateHandle"
+                         "InterlockedAnd" : "annotateHandle",
                         }
 
 # docs say these are numeric, but they are not
@@ -115,15 +115,46 @@ def md_table_to_dict(md_file):
 
     return data
 
+#def remove_trailing_num(s):
+#    pattern = r'_\d+$'
+#    return re.sub(pattern, '', s)
 
 def extract_opcode(hl_op_name, line):
     match = re.search(r'@dx\.op\..*\(i32\s*(?P<int_opcode>\d+)', line)
+    #hl_op_name = remove_trailing_num(hl_op_name)
     if hl_op_name in intrinsic_to_dxil_map:
         match = re.search(r'@dx\.op\.' + intrinsic_to_dxil_map[hl_op_name] +r'.*\(i32\s*(?P<int_opcode>\d+)', line)
     if match:
         return int(match.group('int_opcode'))
     else:
         return None
+
+def get_valid_llvm_type(type_name: str, param_name : str = ""):
+    if type_name == "i32" or type_name == "i8":
+        return "int"
+    if type_name == "f" or type_name == "$o":
+        return "float"
+    if type_name == "i1":
+        return "bool"
+    if type_name == "v":
+        return "void"
+    # handle
+    if type_name == "res":
+        if param_name == "accelerationStructure":
+            return "RaytracingAccelerationStructure"
+        if param_name == "rawBuf":
+            return "RWByteAddressBuffer"
+    if type_name == "$gsptr":
+        return "groupshared float"
+    if (type_name == "waveMat" and (param_name == "waveMatrixLeft" 
+        or param_name == "waveMatrixInput")):
+        return "WaveMatrixLeft<float, 16, 16>"
+    if type_name == "waveMat" and param_name == "waveMatrixRight":
+        return "WaveMatrixRight<float, 16, 16>"
+    if type_name == "waveMat" and param_name == "waveMatrixFragment":
+        return "WaveMatrixLeftColAcc<float, 16, 16>"
+    if type_name == "waveMat" and param_name =="waveMatrixAccumulatorOrFragment":
+        return "WaveMatrixAccumulator<float, 16, 16>"
 
 def get_valid_type(type_name: str, type_index : TypeIndex = TypeIndex.FloatType, 
                    vec_length : VecLength = VecLength.Vec4):
@@ -561,12 +592,12 @@ def build_dxc(rebuild: bool = False):
         print(result.stderr)
         #printverbose(result.stdout)
 
-def get_unique_name(hl_op, name_count) -> str:
-    if hl_op.name in name_count:
-        name_count[hl_op.name] = name_count[hl_op.name] + 1
+def get_unique_name(op_name, name_count) -> str:
+    if op_name in name_count:
+        name_count[op_name] = name_count[op_name] + 1
     else:
-        name_count[hl_op.name] = 0
-    return f"{hl_op.name}{'' if name_count[hl_op.name] == 0 else f'_{name_count[hl_op.name]}'}"
+        name_count[op_name] = 0
+    return f"{op_name}{'' if name_count[op_name] == 0 else f'_{name_count[op_name]}'}"
 
 def check_for_numeric_params(hl_op):
     numeric_found = False
@@ -621,7 +652,7 @@ def run_dxc():
             hl_op.name in hidden_intrinsics):
             continue
         total_intrinsics = total_intrinsics + 1
-        hl_op_name = get_unique_name(hl_op,name_count)
+        hl_op_name = get_unique_name(hl_op.name, name_count)
         numeric_found = check_for_numeric_params(hl_op)
         if hl_op.name == "WaveMatch":
             dxc_command[4] = "-O1"
@@ -630,13 +661,13 @@ def run_dxc():
         if numeric_found and hl_op.name == "dot":
             for vec_len in VecLength:
                 dxc_intrinsic_run_helper(hl_op, dxc_command, scratchpad_path, hl_op_name, intrinsic_to_opcode, fail_list, TypeIndex.FloatType, vec_len)
-                hl_op_name = get_unique_name(hl_op,name_count)
+                hl_op_name = get_unique_name(hl_op.name, name_count)
         if numeric_found and hl_op.name not in float_only_intrinsics:
             for type_index in TypeIndex:
                 if hl_op.name == "dot" and type_index == TypeIndex.FloatType:
                     continue
                 dxc_intrinsic_run_helper(hl_op, dxc_command, scratchpad_path, hl_op_name, intrinsic_to_opcode, fail_list, type_index)
-                hl_op_name = get_unique_name(hl_op,name_count)
+                hl_op_name = get_unique_name(hl_op.name, name_count)
         else:
             dxc_intrinsic_run_helper(hl_op, dxc_command, scratchpad_path, hl_op_name, intrinsic_to_opcode, fail_list)
     
@@ -733,11 +764,16 @@ def get_missing_opcodes_from_docs(hlsl_to_dxil_op, dxil_op_to_docs):
             del copied_dxil_op_to_docs[value]
     return copied_dxil_op_to_docs
 
-def gen_remaining_opcode_data(hlsl_to_dxil_op, dxil_op_to_docs, semantic_to_dxil_op=None):
+def gen_remaining_opcode_data(hlsl_to_dxil_op, dxil_op_to_docs, semantic_to_dxil_op=None, rayquery_to_dxil_op=None, wavemat_to_dxil_op=None):
     opcode_count = len(dxil_op_to_docs)
     rem_opcodes = get_missing_opcodes_from_docs(hlsl_to_dxil_op, dxil_op_to_docs)
     if semantic_to_dxil_op:
         rem_opcodes = get_missing_opcodes_from_docs(semantic_to_dxil_op, rem_opcodes)
+    if rayquery_to_dxil_op:
+        rem_opcodes = get_missing_opcodes_from_docs(rayquery_to_dxil_op, rem_opcodes)
+    if wavemat_to_dxil_op:
+        rem_opcodes = get_missing_opcodes_from_docs(wavemat_to_dxil_op, rem_opcodes)
+        
     data = [
     ['DXIL Opcode', 'DXIL OpName', "Shader Model DXC", "Shader Stages", "DXIL Docs"]
     ]
@@ -758,6 +794,195 @@ def gen_arg_semantics(argSemantic : str, scratchpad : str):
     # Write the payload to a file
     with open(scratchpad, "w") as file:
         file.write(payload)
+
+def gen_trace_rayline(params):
+    ray_struct = ""
+    for i in range(6, len(params)):
+        arg_type = get_valid_llvm_type(params[i].llvm_type, params[i].name)
+        ray_struct += f"\t{arg_type} {params[i].name};\n"
+    ray_struct += f'\tRayDesc ray;\n\tray.TMin = {params[9].name};\n\tray.TMax = {params[13].name};\n'
+    ray_struct += f'\tray.Origin = float3({params[6].name},{params[7].name},{params[8].name});\n'
+    ray_struct += f'\tray.Direction = float3({params[10].name},{params[11].name},{params[12].name});\n'
+    return (6, ray_struct)
+
+def gen_wavematrix():
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    wave_mat_main_types = ["Right", "Left"]
+    wave_mat_acc_types = ["Accumulator"] 
+    wave_mat_linear_acc_types = ["LeftColAcc","RightRowAcc"]
+    wave_mat_types = wave_mat_main_types
+    scalar_funcs = ["ScalarMultiply", "ScalarDivide", "ScalarAdd", "ScalarSubtract"]
+    dxc_command = [
+        DXC_PATH,
+        "<scratchpad_placholder>",
+        "-T lib_6_8",
+        "-enable-16bit-types",
+        "-O0",
+        "-Vd" # There is not shader model 6.9 yet so need to turn validator off
+    ]
+    unique_names = {}
+    wave_query_to_opcode = {}
+    fail_list = []
+
+    for dxil_inst in db_dxil.instr:
+        global_vars = ""
+        start_index = 3
+        if dxil_inst.dxil_op and dxil_inst.category == "WaveMatrix":
+            if dxil_inst.name == "WaveMatrix_Annotate":
+                continue
+            func_name = ("Matrix" if dxil_inst.name == "WaveMatrix_Depth" else "") + dxil_inst.name.split("WaveMatrix_")[-1]
+            if func_name in ["LoadRawBuf", "LoadGroupShared"]:
+                func_name = "Load"
+            elif func_name in ["StoreRawBuf", "StoreGroupShared"]:
+                func_name = "Store"
+            elif func_name == "ScalarOp":
+                func_name = scalar_funcs[0]
+                start_index = 4
+                wave_mat_types = wave_mat_acc_types + wave_mat_linear_acc_types
+            elif func_name == "MultiplyAccumulate":
+                wave_mat_types = wave_mat_acc_types
+            elif func_name.startswith("Multiply") or func_name == "Add":
+                wave_mat_types = wave_mat_acc_types
+            elif func_name == "SumAccumulate":
+                wave_mat_types = wave_mat_linear_acc_types
+            else:
+                wave_mat_types = wave_mat_main_types
+            params = dxil_inst.ops
+            # subtract one for return and one for dxil opcode
+            arg_length = len(params)
+            fn_args = ""
+            ret_val = ""
+            shader_header = '\n[shader("compute")]\n[numthreads(1, 1, 1)]\n void fn() {'
+            if params[0].llvm_type != "v":    
+                    global_vars = "RWByteAddressBuffer rwbuf;\n"
+                    func_call = f"\t{get_valid_llvm_type(params[0].llvm_type, params[0].name)} retVal = waveMat.{func_name}("
+                    ret_val = "\n\trwbuf.Store(0, retVal);"
+            else:
+                func_call = f"\twaveMat.{func_name}("
+            for i in range(start_index, arg_length):
+                arg_type = get_valid_llvm_type(params[i].llvm_type, params[i].name)
+                if params[i].llvm_type == "$gsptr":
+                    global_vars += f"\n{arg_type} {params[i].name}[5];\n"
+                else:
+                    fn_args += f"\n\t{arg_type} {params[i].name};\n"
+                func_call += f"{params[i].name}, "
+            func_call = func_call.rstrip(", ") + ");\n"
+            for wave_mat_type in wave_mat_types:
+                fn_wave_mat = f'\tWaveMatrix{wave_mat_type}<float, 16, 16> waveMat;\n'
+                if wave_mat_type == "RightRowAcc":
+                    fn_args = fn_args.replace("WaveMatrixLeft", "WaveMatrixRight")
+                payload = f"{global_vars}\n{shader_header}{fn_args}\n{fn_wave_mat}{func_call}{ret_val}\n"
+                payload +="}"
+                unique_name = get_unique_name(dxil_inst.name, unique_names)
+                scratchpad = os.path.join(scratchpad_path, f"{unique_name}_test.hlsl")
+                dxc_command[1] = scratchpad
+                write_payload(scratchpad, payload)
+                if dxil_inst.name not in intrinsic_to_dxil_map:
+                    if(dxil_inst.name == "WaveMatrix_Depth"):
+                        intrinsic_to_dxil_map[dxil_inst.name] = "waveMatrix_Depth"
+                    elif func_name in scalar_funcs:
+                        intrinsic_to_dxil_map[dxil_inst.name] = "waveMatrix_ScalarOp"
+                    elif func_name in ["Add", "SumAccumulate"]:
+                        intrinsic_to_dxil_map[dxil_inst.name] = "waveMatrix_Accumulate"
+                    elif func_name == "MultiplyAccumulate":
+                        intrinsic_to_dxil_map[dxil_inst.name] = "waveMatrix_Multiply"
+                    else:
+                        intrinsic_to_dxil_map[dxil_inst.name] = "waveMatrix_" + func_name
+                run_hlsl_test(dxc_command, unique_name, wave_query_to_opcode, fail_list)
+    
+    if(len(fail_list) > 0):
+        lf = len(fail_list)
+        ls = len(wave_query_to_opcode)
+        print_cli(f"FAILED Tests: {lf}") 
+        print_cli(fail_list)
+        print_cli(f"FAILED Percentage: {100* (lf / (lf+ls))}%")
+    else:
+        print_cli(f"100% of tests passed!") 
+        print_cli(wave_query_to_opcode)
+    return wave_query_to_opcode
+                
+            
+
+def gen_ray_query():
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    dxc_command = [
+        DXC_PATH,
+        "<scratchpad_placholder>",
+        "-T lib_6_8",
+        "-enable-16bit-types",
+        "-O0"
+    ]
+    ray_query_flags = ['RAY_FLAG_CULL_NON_OPAQUE', 'RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES', 'RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH']
+    #llvm_types = set()
+    unique_names = {}
+    ray_query_to_opcode = {}
+    fail_list = []
+
+    for dxil_inst in db_dxil.instr:
+        global_vars = ""
+        if dxil_inst.dxil_op and dxil_inst.category == "Inline Ray Query":
+            if dxil_inst.name == "AllocateRayQuery":
+                continue
+            func_name = dxil_inst.name.split("RayQuery_")[-1]
+            params = dxil_inst.ops
+            # subtract one for return and one for dxil opcode
+            arg_length = len(params)
+            fn_args = ""
+            shader_header = f'\n[shader("pixel")]\n{get_valid_llvm_type(params[0].llvm_type)} fn() {"" if params[0].llvm_type == "v" else ": SV_Target"}'
+            #llvm_types.add(params[0].llvm_type)
+            shader_header = shader_header + " {\n"
+            func_call = f"\treturn query.{func_name}("
+            if("TraceRayInline" == func_name):
+                (arg_length,fn_args) = gen_trace_rayline(params)
+            if (func_name.startswith("Candidate") or func_name.startswith("Committed") or
+               func_name.startswith("WorldRay")):
+                arg_length = 2
+            for i in range(2, arg_length):
+                if params[i].name == "rayQueryHandle":
+                    continue
+                #llvm_types.add(params[i].llvm_type)
+                arg_type = get_valid_llvm_type(params[i].llvm_type, params[i].name)
+                if arg_type in ["RaytracingAccelerationStructure"]:    
+                    global_vars += f"{arg_type} {params[i].name} : register(t0, space0);\n"
+                else:
+                    fn_args += f"\t{arg_type} {params[i].name};\n"
+                func_call += f"{params[i].name}, "
+            if("TraceRayInline" == func_name):
+                func_call += f"ray, "
+            func_call = func_call.rstrip(", ") + ");\n}"
+            for ray_query_flag in ray_query_flags:
+                fn_rayQuery = f'\tRayQuery<{ray_query_flag}> query;\n'
+                payload = f"{global_vars}\n{shader_header}{fn_args}\n{fn_rayQuery}{func_call}"
+                unique_name = get_unique_name(dxil_inst.name, unique_names)
+                scratchpad = os.path.join(scratchpad_path, f"{unique_name}_test.hlsl")
+                dxc_command[1] = scratchpad
+                write_payload(scratchpad, payload)
+                if dxil_inst.name not in intrinsic_to_dxil_map:
+                    if (func_name.startswith("World") or func_name.endswith("RayOrigin") or
+                          func_name.endswith("RayDirection") or func_name.endswith("Barycentrics")):
+                        intrinsic_to_dxil_map[dxil_inst.name] ="rayQuery_StateVector"
+                    elif (func_name.startswith("CandidateObject") or func_name.startswith("CandidateWorld") or
+                        func_name.startswith("CommittedObject") or func_name.startswith("CommittedWorld")):
+                            intrinsic_to_dxil_map[dxil_inst.name] = "rayQuery_StateMatrix"
+                    elif (func_name.startswith("Candidate") or func_name.startswith("Committed") or
+                          func_name.startswith("RayFlags") or func_name.startswith("RayTMin")):
+                        intrinsic_to_dxil_map[dxil_inst.name] ="rayQuery_StateScalar"
+                    else:
+                        intrinsic_to_dxil_map[dxil_inst.name] = "rayQuery_" + func_name
+                run_hlsl_test(dxc_command, unique_name, ray_query_to_opcode, fail_list)
+    
+    if(len(fail_list) > 0):
+        lf = len(fail_list)
+        ls = len(ray_query_to_opcode)
+        print_cli(f"FAILED Tests: {lf}") 
+        print_cli(fail_list)
+        print_cli(f"FAILED Percentage: {100* (lf / (lf+ls))}%")
+    else:
+        print_cli(f"100% of tests passed!") 
+        print_cli(ray_query_to_opcode)
+    return ray_query_to_opcode
 
 def shader_semantic_table_to_dict_helper(table, col_name : str):
     # Extracting headers
@@ -888,7 +1113,7 @@ def gen_semantics_hlsl():
         print_cli("FAILED:")
         print_cli(fail_list)
     else:
-        print(semantic_to_opcode)
+        print_cli(semantic_to_opcode)
     return semantic_to_opcode
 
 
@@ -897,6 +1122,7 @@ def gen_semantics_hlsl():
 def main():
     """ Main function used for setting up the cli"""
     global isCli_print
+    isCli_print = True
     args = parser.parse_args()
     functions = []
     if args.intrinsic_type_name:
@@ -909,15 +1135,18 @@ def main():
         get_all_types()
         return 0
     if args.gen_intrinsic_tests:
-        isCli_print = True
         run_dxc()
         return 0
     if args.gen_semantic_tests:
-        isCli_print = True
         gen_semantics_hlsl()
         return 0
+    if args.gen_rayquery_tests:
+        gen_ray_query()
+        return 0
+    if args.gen_wavemat_tests:
+        gen_wavematrix()
+        return 0
     if args.query_all_dxil:
-        isCli_print = True
         query_dxil()
         return 0
     if args.build_dxc:
@@ -939,3 +1168,4 @@ if __name__ == '__main__':
     errcode = main()
     sys.exit(errcode)
     # pylint: enable-msg=C0103
+
