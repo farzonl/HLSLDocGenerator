@@ -14,6 +14,8 @@ parser.add_argument('-qut, --query_unique_types',  dest='query_unique_types', ac
 parser.add_argument('-git, --gen_intrinsic_tests',  dest='gen_intrinsic_tests', action='store_true', default=False)
 parser.add_argument('-gst, --gen_semantic_tests',  dest='gen_semantic_tests', action='store_true', default=False)
 parser.add_argument('-grt, --gen_rayquery_tests',  dest='gen_rayquery_tests', action='store_true', default=False)
+parser.add_argument('-grst, --gen_resource_tests',  dest='gen_resource_tests', action='store_true', default=False)
+parser.add_argument('-gmt, --gen_mesh_tests',  dest='gen_mesh_tests', action='store_true', default=False)
 parser.add_argument('-gwt, --gen_wavemat_tests',  dest='gen_wavemat_tests', action='store_true', default=False)
 parser.add_argument('-bdxc, --build_dxc',  dest='build_dxc', action='store_true', default=False)
 parser.add_argument('-rbdxc, --rebuild_dxc',  dest='rebuild_dxc', action='store_true', default=False)
