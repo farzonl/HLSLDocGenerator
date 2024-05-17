@@ -56,7 +56,8 @@ raygeneration_intrinsics = ["TraceRay"]
 intrinsic_to_dxil_map = {"TraceRay": "traceRay",
                          "InterlockedExchange" : "atomicBinOp",
                          "InterlockedAnd" : "annotateHandle",
-                         "CheckAccessFullyMapped" : "checkAccessFullyMapped"
+                         "CheckAccessFullyMapped" : "checkAccessFullyMapped",
+                         "InterlockedCompareStore": "atomicCompareExchange"
                         }
 
 # docs say these are numeric, but they are not
@@ -426,15 +427,15 @@ def generate_pixel(scratchpad, func_name, params, type_index : TypeIndex):
 
 def generate_hull(scratchpad, func_name, params, type_index : TypeIndex):
     hs_per_patch_data = 'struct HSPerPatchData\n{\n\tfloat edges[ 3 ] : SV_TessFactor;\n\tfloat inside : SV_InsideTessFactor;\n};\n'
-    ps_scene_in = 'struct PSSceneIn {\n\t float4 pos : SV_Position;\n\tfloat2 tex : TEXCOORD0;\n\tfloat3 norm : NORMAL;\n};\n'
+    ps_scene_in = 'struct PSSceneIn {\n\tfloat4 pos : SV_Position;\n\tfloat2 tex : TEXCOORD0;\n\tfloat3 norm : NORMAL;\n};\n'
     hs_per_vertex_data = 'struct HSPerVertexData {\n\tPSSceneIn v;\n};\n'
     data_structures = f'{hs_per_patch_data}{ps_scene_in}{hs_per_vertex_data}'
     main_fn_attr = '[domain("tri")]\n[outputtopology("triangle_cw")]\n[patchconstantfunc("fn")]\n[outputcontrolpoints(3)]\n[partitioning("pow2")]'
     main_fn_sig  = 'HSPerVertexData main( const uint id : SV_OutputControlPointID,const InputPatch< PSSceneIn, 3 > points ) {'
-    main_fn_body = 'HSPerVertexData v;\nv.v = points[ id ];\nreturn v;\n}'
+    main_fn_body = '\n\tHSPerVertexData v;\n\tv.v = points[ id ];\n\treturn v;\n}'
 
     fn_sig = 'export HSPerPatchData fn( const InputPatch< PSSceneIn, 3 > points ) {\n\tHSPerPatchData d;\n\tfloat4 edgeFactor;\n\tfloat2 insideFactor;'
-    fn_body_end = '\td.edges[0]=edgeFactor.x;\n\td.edges[1]=edgeFactor.y;\n\td.edges[2]=edgeFactor.z + edgeFactor.w;\n\td.inside = insideFactor.x + insideFactor.y;\n\treturn d;\n}\n'
+    fn_body_end = '\n\td.edges[0]=edgeFactor.x;\n\td.edges[1]=edgeFactor.y;\n\td.edges[2]=edgeFactor.z + edgeFactor.w;\n\td.inside = insideFactor.x + insideFactor.y;\n\treturn d;\n}\n'
 
     arg_length = len(params)
     fn_args = ""
@@ -623,6 +624,7 @@ def run_hlsl_test(dxc_command, hlsl_name, hlsl_construct_to_opcode, fail_list):
             opcode = int(opcode)
             hlsl_construct_to_opcode[hlsl_name] = opcode
     else:
+        print_cli(result.stderr)
         fail_list.append(hlsl_name)
 
 def dxc_intrinsic_run_helper(hl_op, dxc_command, scratchpad_path, hl_op_name, intrinsic_to_opcode,
@@ -771,7 +773,10 @@ def get_missing_opcodes_from_docs(hlsl_to_dxil_op, dxil_op_to_docs):
 
 def gen_remaining_opcode_data(hlsl_to_dxil_op, dxil_op_to_docs, semantic_to_dxil_op=None, 
                               rayquery_to_dxil_op=None, wavemat_to_dxil_op=None,
-                              resources_to_dxil_op=None, mesh_shader_instr_to_opcode=None):
+                              resources_to_dxil_op=None, resources_sample_to_dxil_op=None,
+                              sampler_feedback_to_opcode=None, mesh_shader_instr_to_opcode=None,
+                              geo_instr_to_opcode=None, hull_instr_to_opcode=None,
+                              node_instr_to_opcode=None, texture_gather_instr_to_opcode=None):
     opcode_count = len(dxil_op_to_docs)
     rem_opcodes = get_missing_opcodes_from_docs(hlsl_to_dxil_op, dxil_op_to_docs)
     if semantic_to_dxil_op:
@@ -782,8 +787,20 @@ def gen_remaining_opcode_data(hlsl_to_dxil_op, dxil_op_to_docs, semantic_to_dxil
         rem_opcodes = get_missing_opcodes_from_docs(wavemat_to_dxil_op, rem_opcodes)
     if resources_to_dxil_op:
         rem_opcodes = get_missing_opcodes_from_docs(resources_to_dxil_op, rem_opcodes)
+    if resources_sample_to_dxil_op:
+        rem_opcodes = get_missing_opcodes_from_docs(resources_sample_to_dxil_op, rem_opcodes)
+    if sampler_feedback_to_opcode:
+        rem_opcodes = get_missing_opcodes_from_docs(sampler_feedback_to_opcode, rem_opcodes)
     if mesh_shader_instr_to_opcode:
         rem_opcodes = get_missing_opcodes_from_docs(mesh_shader_instr_to_opcode, rem_opcodes)
+    if geo_instr_to_opcode:
+        rem_opcodes = get_missing_opcodes_from_docs(geo_instr_to_opcode, rem_opcodes)
+    if hull_instr_to_opcode:
+        rem_opcodes = get_missing_opcodes_from_docs(hull_instr_to_opcode, rem_opcodes)
+    if node_instr_to_opcode:
+        rem_opcodes = get_missing_opcodes_from_docs(node_instr_to_opcode, rem_opcodes)
+    if texture_gather_instr_to_opcode:
+        rem_opcodes = get_missing_opcodes_from_docs(texture_gather_instr_to_opcode, rem_opcodes)
         
     data = [
     ['DXIL Opcode', 'DXIL OpName', "Shader Model DXC", "Shader Stages", "DXIL Docs"]
@@ -846,7 +863,6 @@ def gen_arg_semantics(argSemantic : str, scratchpad : str):
     payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
     # Write the payload to a file
     write_payload(scratchpad, payload)
-
 
 def gen_trace_rayline(params):
     ray_struct = ""
@@ -1207,7 +1223,8 @@ def  gen_resources_test(dxil_inst_name, scratchpad, fn_datastruct, dxil_op_name,
         fn_sig  = f'void fn(uint{"2" if dxil_op_name == "textureStore" else ""} i : SV_InstanceID) '
         fn_sig += "{"
         fn_body = '\n\tbuffer[i] = 1;\n}'
-
+    if dxil_inst_name == "TextureStoreSample":
+        fn_sig = 'float4 fn(uint sampleSlice : S, uint2 pos2 : PP) : SV_Target {'
     payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
     # Write the payload to a file
     write_payload(scratchpad, payload)
@@ -1225,8 +1242,15 @@ def  gen_reg_buffer_resources(dxil_inst_name, scratchpad):
     dxil_op_name = 'bufferLoad'
     #note:  Buffer is a read only store does not make sense
     if dxil_inst_name.endswith("Store"):
+        fn_datastruct = 'RWBuffer<uint> buffer;'
         dxil_op_name = 'bufferStore'
     gen_resources_test(dxil_inst_name, scratchpad, fn_datastruct, dxil_op_name)
+
+def gen_update_buffer_resources(dxil_inst_name, scratchpad):
+    fn_datastruct = 'AppendStructuredBuffer<float4> buffer;\n'
+    dxil_op_name = 'bufferUpdateCounter'
+    fn_body = "\n\tbuffer.Append(1);\n\treturn 0;\n}"
+    gen_resources_test(dxil_inst_name, scratchpad, fn_datastruct, dxil_op_name, fn_body)
 
 
 def  gen_cBufferload_legacy_resources(dxil_inst_name, scratchpad):
@@ -1245,6 +1269,13 @@ def  gen_texture_store_resources(dxil_inst_name, scratchpad):
     dxil_op_name = 'textureStore'
     gen_resources_test(dxil_inst_name, scratchpad, fn_datastruct, dxil_op_name)
 
+def gen_texture_store_sample_resources(dxil_inst_name, scratchpad):
+    fn_datastruct = "RWTexture2DMS<float4,8> buffer;\n"
+    dxil_op_name ="textureStoreSample"
+    fn_sig = 'float4 fn(uint sampleSlice : S, uint2 pos2 : PP) : SV_Target {'
+    fn_body = "\n\tfloat4 r = buffer.sample[sampleSlice][pos2];\n\tbuffer[pos2] = r;\n\treturn r;\n}"
+    
+    gen_resources_test(dxil_inst_name, scratchpad, fn_datastruct, dxil_op_name, fn_body)
 
 def gen_create_handle_from_binding(dxc_command, dxil_inst_name, scratchpad):
     fn_datastruct = 'StructuredBuffer<uint> buffer;\n'
@@ -1273,20 +1304,24 @@ def gen_resources():
     for dxil_inst in db_dxil.instr:
         if dxil_inst.dxil_op and dxil_inst.category == "Resources":
             scratchpad = os.path.join(scratchpad_path,  dxil_inst.name +"_test.hlsl")
-            if dxil_inst.name in ["BufferStore", "BufferUpdateCounter", "CreateHandle", "CBufferLoad", "TextureStoreSample"]:
+            if dxil_inst.name in ["CreateHandle", "CBufferLoad", ]:
                 #Note: These Resources are skipped
                 continue
-            if dxil_inst.name.startswith("RawBuffer"):
+            elif dxil_inst.name.startswith("RawBuffer"):
                 gen_raw_buffer_resources(dxil_inst.name, scratchpad)
-            if dxil_inst.name == "BufferLoad": #dxil_inst.name.startswith("Buffer"):
+            elif dxil_inst.name == "BufferUpdateCounter":
+                gen_update_buffer_resources(dxil_inst.name, scratchpad)
+            elif dxil_inst.name.startswith("Buffer"):
                 gen_reg_buffer_resources(dxil_inst.name, scratchpad)
-            if dxil_inst.name == "CBufferLoadLegacy":
+            elif dxil_inst.name == "CBufferLoadLegacy":
                 gen_cBufferload_legacy_resources(dxil_inst.name, scratchpad)
-            if dxil_inst.name == "TextureLoad":
+            elif dxil_inst.name == "TextureLoad":
                 gen_texture_load_resources(dxil_inst.name, scratchpad)
-            if dxil_inst.name == "TextureStore":
+            elif dxil_inst.name == "TextureStore":
                 gen_texture_store_resources(dxil_inst.name, scratchpad)
-            if dxil_inst.name == "GetDimensions":
+            elif dxil_inst.name == "TextureStoreSample":
+                gen_texture_store_sample_resources(dxil_inst.name, scratchpad)
+            elif dxil_inst.name == "GetDimensions":
                 gen_get_dimensions(dxil_inst.name, scratchpad)
             dxc_command[1] = scratchpad
             run_hlsl_test(dxc_command, dxil_inst.name, resource_to_opcode, fail_list)
@@ -1382,9 +1417,445 @@ def gen_mesh_shader_instr():
         print_cli(mesh_shader_instr_to_opcode)
     return mesh_shader_instr_to_opcode
 
+def gen_sample(dxil_inst_name, scratchpad):
+    fn_attr = '[shader("pixel")]'
+    fn_sig = "float4 fn(float2 a : A) : SV_Target {"
+    fn_body = f'\n\treturn text1.{dxil_inst_name}(samp1, a'
+    fn_datastruct = 'Texture2D<float4> text1 : register(t3);\n'
 
-
+    if dxil_inst_name in ["Sample", "SampleBias", "SampleGrad", "SampleLevel"]:
+        fn_datastruct += "SamplerState samp1 : register(s5);"
+    elif dxil_inst_name in ["SampleCmp", "SampleCmpLevelZero", 
+                            "SampleCmpLevel", "SampleCmpBias", "SampleCmpGrad"]:
+        fn_datastruct += "SamplerComparisonState samp1 : register(s5);"
+        fn_body = '\n\tuint cmp = a.y + a.x;\n' + fn_body + ', cmp'
     
+    if dxil_inst_name in ["SampleCmpLevel", "SampleLevel"]:
+        fn_body = '\n\tfloat level = a.y;\n' + fn_body + ', level'
+    
+    if dxil_inst_name in ["SampleBias", 'SampleCmpBias']:
+        fn_body = '\n\tfloat bias = a.y;\n' + fn_body + ', bias'
+    if dxil_inst_name in ["SampleGrad", "SampleCmpGrad"]:
+        fn_body = '\n\tfloat2 dx = a.yy, dy = a.yx;' + fn_body + ', dx, dy'
+    fn_body +=");\n}"
+
+    if dxil_inst_name == "Texture2DMSGetSamplePosition":
+        fn_sig = "float4 fn(uint a : S) : SV_Target {"
+        fn_datastruct = "RWTexture2DMS<float4,8> text1;\n"
+        fn_body = '\n\treturn text1.GetSamplePosition(a).xyxy;\n}'
+
+    payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
+    intrinsic_to_dxil_map[dxil_inst_name] = dxil_inst_name[:1].lower() + dxil_inst_name[1:]
+    # Write the payload to a file
+    write_payload(scratchpad, payload)
+
+def gen_resource_sample():
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    dxc_command = [
+        DXC_PATH,
+        "<scratchpad_placholder>",
+        "-T lib_6_8",
+        "-enable-16bit-types",
+        "-O0"
+    ]
+    resource_sample_to_opcode = {}
+    fail_list = []
+
+    for dxil_inst in db_dxil.instr:
+        if dxil_inst.dxil_op and dxil_inst.category in ["Resources - sample", "Comparison Samples"]:
+            scratchpad = os.path.join(scratchpad_path,  dxil_inst.name +"_test.hlsl")
+            if dxil_inst.name in ["RenderTargetGetSamplePosition", "RenderTargetGetSampleCount"]:
+                # covered via intrinsics
+                continue
+            
+            gen_sample(dxil_inst.name, scratchpad)
+            dxc_command[1] = scratchpad
+            run_hlsl_test(dxc_command, dxil_inst.name, resource_sample_to_opcode, fail_list)
+    if(len(fail_list) > 0):
+        print_cli("FAILED:")
+        print_cli(fail_list)
+    else:
+        print_cli(resource_sample_to_opcode)
+    return resource_sample_to_opcode
+
+def gen_sampler_feedback_test(dxil_inst_name, scratchpad):
+    fn_attr = '[shader("pixel")]'
+    fn_sig = "void fn(float2 a : A) : SV_Target {"
+    fn_body = f'\n\tfloat2 coords2D = float2(1, 2);\n\tfbMinMip.{dxil_inst_name}(tex2D, samp, coords2D'
+    fn_datastruct = 'FeedbackTexture2D<SAMPLER_FEEDBACK_MIN_MIP> fbMinMip;\nTexture2D<float> tex2D;\nSamplerState samp;\n'
+
+    if dxil_inst_name == "WriteSamplerFeedbackBias":
+        fn_body = '\n\tfloat bias = a.y;\n' + fn_body + ', bias'
+    if dxil_inst_name == "WriteSamplerFeedbackLevel":
+        fn_body = '\n\tfloat level = a.y;\n' + fn_body + ', level'
+    if dxil_inst_name == "WriteSamplerFeedbackGrad":
+        fn_body = '\n\tfloat2 dx = a.yy, dy = a.yx;' + fn_body + ', dx, dy'
+    
+    fn_body +=");\n}"
+
+    payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
+    intrinsic_to_dxil_map[dxil_inst_name] = dxil_inst_name[:1].lower() + dxil_inst_name[1:]
+    # Write the payload to a file
+    write_payload(scratchpad, payload)
+
+def gen_sampler_feedback():
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    dxc_command = [
+        DXC_PATH,
+        "<scratchpad_placholder>",
+        "-T lib_6_8",
+        "-enable-16bit-types",
+        "-O0"
+    ]
+    sampler_feedback_to_opcode = {}
+    fail_list = []
+
+    for dxil_inst in db_dxil.instr:
+        if dxil_inst.dxil_op and dxil_inst.category == "Sampler Feedback":
+            scratchpad = os.path.join(scratchpad_path,  dxil_inst.name +"_test.hlsl")
+            gen_sampler_feedback_test(dxil_inst.name, scratchpad)
+            dxc_command[1] = scratchpad
+            run_hlsl_test(dxc_command, dxil_inst.name, sampler_feedback_to_opcode, fail_list)
+    if(len(fail_list) > 0):
+        print_cli("FAILED:")
+        print_cli(fail_list)
+    else:
+        print_cli(sampler_feedback_to_opcode)
+    return sampler_feedback_to_opcode
+
+def gen_geometry_shader_test(dxil_inst_name, scratchpad):
+    fn_datastruct = 'struct GSOutPSIn {\n\tfloat4  clr : COLOR0;\n\tfloat4  pos : SV_Position;\n};\n\n'
+    fn_attr = '[shader("geometry")]\n[maxvertexcount(3)]'
+    fn_sig =  'void main(inout TriangleStream<GSOutPSIn> stream) {'
+    fn_body = '\n\tGSOutPSIn gpsIn;\n\tgpsIn.clr = float4(1, 2, 3, 4);\n\tgpsIn.pos = float4(5, 6, 7, 8);'
+    if dxil_inst_name == "CutStream":
+        fn_body += '\n\tstream.RestartStrip();'
+    fn_body += '\n\tstream.Append(gpsIn);'
+    fn_body +="\n}"
+    payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
+    intrinsic_to_dxil_map[dxil_inst_name] = dxil_inst_name[:1].lower() + dxil_inst_name[1:]
+    # Write the payload to a file
+    write_payload(scratchpad, payload)
+
+
+def gen_geometry_shader_instr():
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    dxc_command = [
+        DXC_PATH,
+        "<scratchpad_placholder>",
+        "-T lib_6_8",
+        "-enable-16bit-types",
+        "-O0"
+    ]
+    geometry_instr_to_opcode = {}
+    fail_list = []
+
+    for dxil_inst in db_dxil.instr:
+        if dxil_inst.dxil_op and dxil_inst.category == "Geometry shader":
+            scratchpad = os.path.join(scratchpad_path,  dxil_inst.name +"_test.hlsl")
+            if dxil_inst.name in ["GSInstanceID", "EmitThenCutStream"]:
+                #Note: EmitThenCutStream not emitted in HLOperationLower.cpp
+                #Note: GSInstanceID is covered by Semantics 
+                continue
+            gen_geometry_shader_test(dxil_inst.name, scratchpad)
+            dxc_command[1] = scratchpad
+            run_hlsl_test(dxc_command, dxil_inst.name, geometry_instr_to_opcode, fail_list)
+    if(len(fail_list) > 0):
+        print_cli("FAILED:")
+        print_cli(fail_list)
+    else:
+        print_cli(geometry_instr_to_opcode)
+    return geometry_instr_to_opcode
+
+def gen_hull(dxil_inst_name, scratchpad : str):
+    fn_datastruct = 'struct HSPerPatchData {\n\tfloat edges[3] : SV_TessFactor;\n\tfloat inside : SV_InsideTessFactor;\n};\n'
+    fn_datastruct += 'struct PSSceneIn {\n\tfloat2 tex : TEXCOORD0;\n};'
+    fn_datastruct += "\nstruct HSPerVertexData {\n\tPSSceneIn v;\n};"
+    if dxil_inst_name == "StorePatchConstant":
+        fn_datastruct += '\nHSPerPatchData fn() {\n\tHSPerPatchData d;\n\treturn d;\n}\n'
+    if dxil_inst_name == "LoadOutputControlPoint":
+        fn_datastruct += '\nHSPerPatchData fn(OutputPatch<HSPerVertexData, 3> outpoints) {\n\tHSPerPatchData d;\n\td.edges[ 0 ] = outpoints[0].v.tex.x;\n\treturn d;\n}\n'
+    fn_attr = '[shader("hull")]\n[domain("tri")]\n[partitioning("fractional_odd")]\n[outputtopology("triangle_cw")]\n[patchconstantfunc("fn")]\n[outputcontrolpoints(3)]'
+    fn_sig  = 'HSPerVertexData main(uint id : SV_OutputControlPointID,const InputPatch< PSSceneIn, 3 > points ) {' 
+    fn_body = '\n\tHSPerVertexData v;\n\tv.v = points[ id ];\n\treturn v;\n}'
+    # Generate the payload
+    payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
+    # Write the payload to a file
+    write_payload(scratchpad, payload)
+
+def gen_hull_shader_instr():
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    dxc_command = [
+        DXC_PATH,
+        "<scratchpad_placholder>",
+        "-T hs_6_8",
+        "-E main",
+        "-enable-16bit-types",
+        "-O0"
+    ]
+    hull_instr_to_opcode = {}
+    fail_list = []
+
+    for dxil_inst in db_dxil.instr:
+        if dxil_inst.dxil_op and dxil_inst.category in ["Domain and hull shader", "Hull shader"]:
+            scratchpad = os.path.join(scratchpad_path,  dxil_inst.name +"_test.hlsl")
+            if dxil_inst.name in ["OutputControlPointID", "LoadPatchConstant"]:
+                #Note: LoadPatchConstant covered by domain tests
+                #Note: OutputControlPointID is covered by Semantics 
+                continue
+            gen_hull(dxil_inst.name, scratchpad)
+            dxc_command[1] = scratchpad
+            run_hlsl_test(dxc_command, dxil_inst.name, hull_instr_to_opcode, fail_list)
+    if(len(fail_list) > 0):
+        print_cli("FAILED:")
+        print_cli(fail_list)
+    else:
+        print_cli(hull_instr_to_opcode)
+    return hull_instr_to_opcode
+
+nodeTypes = {
+    "EmptyNodeOutput" : {
+        "IsValid" : [("i1","v"), "nodeOutputIsValid"], 
+        "ThreadIncrementOutputCount" : [("v","i32"), 'incrementOutputCount'], 
+        "GroupIncrementOutputCount" :  [("v","i32"), 'incrementOutputCount']
+    },
+    "EmptyNodeInput" : {
+        "Count" : [("i32","v"), "getInputRecordCount"]
+    },
+    "NodeOutput<T>" : {
+        "GetThreadNodeOutputRecords" :[("ThreadNodeOutputRecords<T>","i32"), "allocateNodeOutputRecords"],
+        "GetGroupNodeOutputRecords"  :[("GroupNodeOutputRecords<T>", "i32"), "createNodeOutputHandle"] 
+    },
+    "ThreadNodeOutputRecords<T>" : {
+        "OutputComplete" :[("v","v"), "outputComplete"],
+    },
+    "GroupNodeOutputRecords<T>"  : {
+        "OutputComplete" :[("v","v"), "outputComplete"],
+    },
+    "RWDispatchNodeInputRecord<T>" : {
+        "FinishedCrossGroupSharing" :[("i1","v"), "finishedCrossGroupSharing"],
+        "Get" : [("T", "v"), "annotateNodeHandle"] # Technically getNodeRecordPtr,"
+    },
+    "DispatchNodeInputRecord<T>" : {
+        "Get" : [("T", "v"), "getNodeRecordPtr"]
+    },
+    "ThreadNodeInputRecord<T>" : {
+        "Get" : [("T", "v"), "createNodeInputRecordHandle"] # Technically getNodeRecordPtr,"
+    },
+    "RWThreadNodeInputRecord<T>" : {
+        "Get" : [("T", "v"), "annotateNodeRecordHandle"] # Technically getNodeRecordPtr," 
+    },
+    "NodeOutputArray<T>" : {
+        #"[]" : [("NodeOutput<T>", "i32"), "indexNodeHandle"],
+        "GetThreadNodeOutputRecords" :[("ThreadNodeOutputRecords<T>","i32"), "indexNodeHandle"],
+        "GetGroupNodeOutputRecords"  :[("GroupNodeOutputRecords<T>", "i32"), "annotateNodeHandle"] 
+    }
+}
+
+node_class_initializers = {
+    "ThreadNodeOutputRecords<T>" : "GetThreadNodeOutputRecords",
+    "GroupNodeOutputRecords<T>" : "GetGroupNodeOutputRecords"
+}
+
+node_func_name_to_class_dict = {
+        "ThreadIncrementOutputCount" : ["EmptyNodeOutput"],
+        "GroupIncrementOutputCount" : ["EmptyNodeOutput"],
+        "OutputComplete" : ["ThreadNodeOutputRecords<T>", "GroupNodeOutputRecords<T>"],
+        "Count" : ["EmptyNodeInput"],
+        "FinishedCrossGroupSharing" : ["RWDispatchNodeInputRecord<T>"],
+        "IsValid" : ["EmptyNodeOutput"],
+        "GetThreadNodeOutputRecords" : ["NodeOutput<T>"],
+        "GetGroupNodeOutputRecords" : ["NodeOutput<T>"]
+    }
+
+
+def gen_node(dxil_name, class_name, fn_name, add_barrier = False):
+    fn_datastruct = 'RWBuffer<uint> buffer;'
+    fn_attr = '[Shader("node")]\n[NodeLaunch("thread")]\n[NodeIsProgramEntry]'
+    if class_name in ["DispatchNodeInputRecord<T>", "RWDispatchNodeInputRecord<T>"]:
+        fn_attr = '[Shader("node")]\n[NodeLaunch("broadcasting")]\n[numthreads(1,1,1)]\n[NodeDispatchGrid(1,1,1)]'
+    if fn_name == "Count":
+         fn_attr = '[Shader("node")]\n[NodeLaunch("coalescing")]\n[NodeIsProgramEntry]\n[numthreads(1,1,1)]'
+    if fn_name == "FinishedCrossGroupSharing":
+        fn_attr = '[Shader("node")]\n[NodeLaunch("broadcasting")]\n[NodeDispatchGrid(1,1,1)]\n[NumThreads(1,1,1)]'
+    if fn_name in ["GetThreadNodeOutputRecords", "GetGroupNodeOutputRecords"]:
+        fn_datastruct = ''
+
+    param_name = f'node{"Output" if "Output" in class_name else ""}'
+    param_name = f'node{"Input" if "Input" in class_name else ""}'
+    templatized_class_name = class_name.replace("<T>", "<RECORD>")
+    if class_name != templatized_class_name:
+        fn_datastruct += '\nstruct '
+        if fn_name == "FinishedCrossGroupSharing":
+            fn_datastruct += '[NodeTrackRWInputSharing]'
+        fn_datastruct += ' RECORD {\n\tuint value;\n};\n'
+    fn_sig = f'void fn ({templatized_class_name} {param_name})'
+    arr_syntax = '[0]' if class_name == "NodeOutputArray<T>" else ""
+    fn_body = f'{param_name}{arr_syntax}.{fn_name}('
+    if class_name in node_class_initializers:
+        base_class = node_func_name_to_class_dict[node_class_initializers[class_name]][0]
+        base_class = base_class.replace("<T>", "<RECORD>")
+        fn_sig = f'void fn ({base_class} base{param_name})'
+        fn_body = f'{templatized_class_name} {param_name} = base{param_name}{arr_syntax}.{node_class_initializers[class_name]}(1);\n\t{fn_body}'
+    
+    fn_sig += " {\n"
+    
+    fn_param_list = nodeTypes[class_name][fn_name][0]
+    arg_length = len(fn_param_list)
+    barrier_param = param_name
+    if fn_name in ["GetThreadNodeOutputRecords", "GetGroupNodeOutputRecords"]:
+        return_type = fn_param_list[0].replace("<T>", "<RECORD>")
+        fn_body = f'\t{return_type} outrec = {fn_body}'
+        barrier_param = 'outrec'
+    elif  fn_param_list[0] != 'v':
+        fn_body = f'\tbuffer[0] = {fn_body}'
+    else:
+        fn_body = '\t' + fn_body
+    for i in range(1, arg_length):
+            type_name = get_valid_llvm_type(fn_param_list[i])
+            if type_name == "void":
+                continue
+            type_val = int(1) 
+            if type_name == 'float' or type_name == 'double' or type_name == 'half':
+                type_val = float(1.0)
+            fn_body += f"{type_val}, "
+    fn_body = fn_body.rstrip(", ") + ')'
+    
+    if fn_name == "Get":
+        fn_body += ".value"
+
+    fn_body += ";"
+    if add_barrier:
+        fn_body += f'\n\tBarrier({barrier_param}, 0);'
+        intrinsic_to_dxil_map[dxil_name] = 'barrierByNodeRecordHandle'
+    else:
+        intrinsic_to_dxil_map[dxil_name] = nodeTypes[class_name][fn_name][1]
+    fn_body += '\n}'
+
+    payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
+
+    return payload
+
+def gen_calc_lod(dxil_name):
+    fn_datastruct =  'Texture2D<float4> tex2d : register(t0, space0);'
+    fn_datastruct += '\nSamplerState Samp : register(s0, space0);'
+    fn_datastruct += '\nRWBuffer<float> buffer;'
+    fn_attr = '[shader("node")]\n[NodeLaunch("broadcasting")]\n[NodeDispatchGrid(1, 1, 1)]\n[NumThreads(2,2,2)]'
+    fn_sig = 'void fn(uint3 tid : SV_GroupThreadID) {'
+    fn_body = '\n\tfloat2 uv = tid.xy;\n\tbuffer[0] = tex2d.CalculateLevelOfDetail(Samp, uv);\n}'
+    payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
+
+    intrinsic_to_dxil_map[dxil_name] = 'calculateLOD'
+
+    return payload
+
+def gen_node_shader_instr():
+    work_graph_to_fn_name_dict = {
+        "IncrementOutputCount" :["ThreadIncrementOutputCount", "GroupIncrementOutputCount"],
+        "OutputComplete" :["OutputComplete"],
+        "GetInputRecordCount" :["Count"],
+        "FinishedCrossGroupSharing" :["FinishedCrossGroupSharing" ],
+        "NodeOutputIsValid" :["IsValid"],
+    }
+
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    dxc_command = [
+        DXC_PATH,
+        "<scratchpad_placholder>",
+        "-T lib_6_8",
+        "-enable-16bit-types",
+        "-O0"
+    ]
+    node_instr_to_opcode = {}
+    fail_list = []
+
+    for dxil_inst in db_dxil.instr:
+        if dxil_inst.dxil_op and dxil_inst.category in ["Work Graph intrinsics"]:
+            if dxil_inst.name in ["GetRemainingRecursionLevels"]:
+                #Note: GetRemainingRecursionLevels covered by intrinsics
+                continue
+            for fn_name in work_graph_to_fn_name_dict[dxil_inst.name ]:
+                for class_name in node_func_name_to_class_dict[fn_name]:
+                    dxil_name = f'{class_name.split("<")[0]}_{fn_name}'
+                    scratchpad = os.path.join(scratchpad_path,  dxil_name +"_test.hlsl")
+                    payload = gen_node(dxil_name, class_name, fn_name)
+                    write_payload(scratchpad, payload)
+                    dxc_command[1] = scratchpad
+                    run_hlsl_test(dxc_command, dxil_name, node_instr_to_opcode, fail_list)
+    
+    class_names = ["NodeOutput<T>", "DispatchNodeInputRecord<T>", "RWDispatchNodeInputRecord<T>",
+                   "RWThreadNodeInputRecord<T>","ThreadNodeInputRecord<T>", "NodeOutputArray<T>"]
+    for class_name in class_names:
+        for fn_name in nodeTypes[class_name]:
+            if fn_name == "FinishedCrossGroupSharing":
+                continue
+            dxil_name = f'{class_name.split("<")[0]}_{fn_name}'
+            scratchpad = os.path.join(scratchpad_path,  dxil_name +"_test.hlsl")
+            payload = gen_node(dxil_name, class_name, fn_name)
+            write_payload(scratchpad, payload)
+            dxc_command[1] = scratchpad
+            run_hlsl_test(dxc_command, dxil_name, node_instr_to_opcode, fail_list)
+        
+            dxil_name = f'barrier_{class_name.split("<")[0]}_{fn_name}'
+            scratchpad = os.path.join(scratchpad_path,  dxil_name +"_test.hlsl")
+            payload = gen_node(dxil_name, class_name, fn_name, True)
+            write_payload(scratchpad, payload)
+            dxc_command[1] = scratchpad
+            run_hlsl_test(dxc_command, dxil_name, node_instr_to_opcode, fail_list)
+
+    dxil_name = 'CalculateLevelOfDetail'
+    scratchpad = os.path.join(scratchpad_path,  dxil_name +"_test.hlsl")
+    payload = gen_calc_lod(dxil_name)
+    write_payload(scratchpad, payload)
+    dxc_command[1] = scratchpad
+    run_hlsl_test(dxc_command, dxil_name, node_instr_to_opcode, fail_list)
+    
+
+    if(len(fail_list) > 0):
+        print_cli("FAILED:")
+        print_cli(fail_list)
+    else:
+        print_cli(node_instr_to_opcode)
+    return node_instr_to_opcode
+
+def gen_texture_gather():
+
+    texture_gather_to_fn_name_dict = {
+        "TextureGather" :["GatherRed", "GatherGreen", "GatherBlue", "GatherAlpha"],
+        "TextureGatherCmp" :["GatherCmpRed", "GatherCmpGreen", "GatherCmpBlue", "GatherCmpAlpha"],
+        "TextureGatherRaw" :["GatherRaw"],
+    }
+
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    dxc_command = [
+        DXC_PATH,
+        "<scratchpad_placholder>",
+        "-T lib_6_8",
+        "-enable-16bit-types",
+        "-O0"
+    ]
+    texture_gather_instr_to_opcode = {}
+    fail_list = []
+
+    for dxil_inst in db_dxil.instr:
+        if dxil_inst.dxil_op and dxil_inst.category == "Resources - gather":
+            for fn_name in texture_gather_to_fn_name_dict[dxil_inst.name ]:
+                scratchpad = os.path.join(scratchpad_path,  fn_name +"_test.hlsl")
+                dxc_command[1] = scratchpad
+                run_hlsl_test(dxc_command, fn_name, texture_gather_instr_to_opcode, fail_list)
+    if(len(fail_list) > 0):
+        print_cli("FAILED:")
+        print_cli(fail_list)
+    else:
+        print_cli(texture_gather_instr_to_opcode)
+    return texture_gather_instr_to_opcode
+
 def main():
     """ Main function used for setting up the cli"""
     global isCli_print
@@ -1412,11 +1883,29 @@ def main():
     if args.gen_resource_tests:
         gen_resources()
         return 0
+    if args.gen_resource_sample_tests:
+        gen_resource_sample()
+        return 0
+    if args.gen_resource_gather_tests:
+        gen_texture_gather()
+        return 0
+    if args.gen_sampler_feedback_tests:
+        gen_sampler_feedback()
+        return 0
     if args.gen_wavemat_tests:
         gen_wavematrix()
         return 0
     if args.gen_mesh_tests:
         gen_mesh_shader_instr()
+        return 0
+    if args.gen_geometry_tests:
+        gen_geometry_shader_instr()
+        return 0
+    if args.gen_hull_tests:
+        gen_hull_shader_instr()
+        return 0
+    if args.gen_node_tests:
+        gen_node_shader_instr()
         return 0
     if args.query_all_dxil:
         query_dxil()
