@@ -1740,7 +1740,7 @@ def gen_node(dxil_name, class_name, fn_name, add_barrier = False):
 
     return payload
 
-def gen_calc_lod(dxil_name):
+def gen_calc_lod():
     fn_datastruct =  'Texture2D<float4> tex2d : register(t0, space0);'
     fn_datastruct += '\nSamplerState Samp : register(s0, space0);'
     fn_datastruct += '\nRWBuffer<float> buffer;'
@@ -1749,8 +1749,25 @@ def gen_calc_lod(dxil_name):
     fn_body = '\n\tfloat2 uv = tid.xy;\n\tbuffer[0] = tex2d.CalculateLevelOfDetail(Samp, uv);\n}'
     payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
 
-    intrinsic_to_dxil_map[dxil_name] = 'calculateLOD'
+    intrinsic_to_dxil_map['CalculateLevelOfDetail'] = 'calculateLOD'
 
+    return payload
+
+def gen_barrier_by_memory_handle():
+    fn_datastruct =  'RWBuffer<float> buffer;\n'
+    fn_attr = '[shader("node")]\n[NodeLaunch("broadcasting")]\n[NodeDispatchGrid(1, 1, 1)]\n[NumThreads(2,2,2)]'
+    fn = 'void fn() {\n\tBarrier(buffer, 3);\n}'
+    payload = f"{fn_datastruct}{fn_attr}\n{fn}"
+    intrinsic_to_dxil_map['BarrierByMemoryHandle'] = 'barrierByMemoryHandle'
+    return payload
+
+def gen_create_handle_from_heap():
+    fn_datastruct =  'RWBuffer<float> buffer;\n'
+    fn_attr = '[shader("compute")]\n[numthreads(1, 1, 1)]'
+    fn_sig = 'void fn( uint2 ID : SV_DispatchThreadID) {'
+    fn_body = '\n\tBuffer<float> buf = ResourceDescriptorHeap[NonUniformResourceIndex(ID.x)];\n\tbuffer[0] = buf[0];\n}'
+    payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
+    intrinsic_to_dxil_map['CreateHandleFromHeap'] = 'createHandleFromHeap'
     return payload
 
 def gen_node_shader_instr():
@@ -1808,12 +1825,14 @@ def gen_node_shader_instr():
             dxc_command[1] = scratchpad
             run_hlsl_test(dxc_command, dxil_name, node_instr_to_opcode, fail_list)
 
-    dxil_name = 'CalculateLevelOfDetail'
-    scratchpad = os.path.join(scratchpad_path,  dxil_name +"_test.hlsl")
-    payload = gen_calc_lod(dxil_name)
-    write_payload(scratchpad, payload)
-    dxc_command[1] = scratchpad
-    run_hlsl_test(dxc_command, dxil_name, node_instr_to_opcode, fail_list)
+    dxil_names = { 'CalculateLevelOfDetail' : gen_calc_lod, "BarrierByMemoryHandle" : gen_barrier_by_memory_handle,
+                  'CreateHandleFromHeap' : gen_create_handle_from_heap }
+    for dxil_name in dxil_names:
+        scratchpad = os.path.join(scratchpad_path,  dxil_name +"_test.hlsl")
+        payload = dxil_names[dxil_name]()
+        write_payload(scratchpad, payload)
+        dxc_command[1] = scratchpad
+        run_hlsl_test(dxc_command, dxil_name, node_instr_to_opcode, fail_list)
     
 
     if(len(fail_list) > 0):
@@ -1823,11 +1842,36 @@ def gen_node_shader_instr():
         print_cli(node_instr_to_opcode)
     return node_instr_to_opcode
 
+def gen_texture_gather_test(dxil_inst_name, fn_name):
+    fn_attr = '[shader("pixel")]'
+    fn_sig =  'uint16_t4 fn(float2 a : A) : SV_Target {\n'
+    fn_datastruct =  'SamplerState g_samp : register(s5);\n'
+    fn_body = f'return g_tex.{fn_name}(g_samp, a'
+    
+    if dxil_inst_name == "TextureGatherCmp":
+        fn_datastruct =  'SamplerComparisonState g_samp;\n'
+        fn_body += ', 0.0'
+    
+    if dxil_inst_name in ["TextureGather", "TextureGatherCmp"]:
+        fn_datastruct += 'Texture2D g_tex;'
+        fn_body += ', int2(1,1)'
+
+    if dxil_inst_name == "TextureGatherRaw":
+        fn_datastruct += 'Texture2D<uint16_t> g_tex : register(t1);'
+    
+    fn_body += ');\n}'
+
+    intrinsic_to_dxil_map[fn_name] = dxil_inst_name[:1].lower() + dxil_inst_name[1:]
+    payload = f"{fn_datastruct}{fn_attr}\n{fn_sig}{fn_body}"
+
+    return payload
+    
+
 def gen_texture_gather():
 
     texture_gather_to_fn_name_dict = {
-        "TextureGather" :["GatherRed", "GatherGreen", "GatherBlue", "GatherAlpha"],
-        "TextureGatherCmp" :["GatherCmpRed", "GatherCmpGreen", "GatherCmpBlue", "GatherCmpAlpha"],
+        "TextureGather" :["Gather", "GatherRed", "GatherGreen", "GatherBlue", "GatherAlpha"],
+        "TextureGatherCmp" :["GatherCmp", "GatherCmpRed", "GatherCmpGreen", "GatherCmpBlue", "GatherCmpAlpha"],
         "TextureGatherRaw" :["GatherRaw"],
     }
 
@@ -1848,6 +1892,8 @@ def gen_texture_gather():
             for fn_name in texture_gather_to_fn_name_dict[dxil_inst.name ]:
                 scratchpad = os.path.join(scratchpad_path,  fn_name +"_test.hlsl")
                 dxc_command[1] = scratchpad
+                payload = gen_texture_gather_test(dxil_inst.name, fn_name)
+                write_payload(scratchpad, payload)
                 run_hlsl_test(dxc_command, fn_name, texture_gather_instr_to_opcode, fail_list)
     if(len(fail_list) > 0):
         print_cli("FAILED:")
