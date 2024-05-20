@@ -666,7 +666,8 @@ def query_dxil():
     opcode_to_dxil_docs = {}
     for dxil_inst in db_dxil.instr:
         if dxil_inst.dxil_op:
-            opcode_to_dxil_docs[dxil_inst.dxil_opid] = [dxil_inst.dxil_op, formatShaderModel(dxil_inst.shader_model), dxil_inst.shader_stages, dxil_inst.doc]
+            opcode_to_dxil_docs[dxil_inst.dxil_opid] = [dxil_inst.dxil_op, formatShaderModel(dxil_inst.shader_model), 
+                                                        dxil_inst.category, dxil_inst.shader_stages, dxil_inst.doc]
             print_cli(dxil_inst.dxil_op, dxil_inst.dxil_opid, formatShaderModel(dxil_inst.shader_model), dxil_inst.shader_stages, dxil_inst.doc)
     return opcode_to_dxil_docs
 
@@ -711,13 +712,13 @@ def hlsl_docs_helper(hlsl_intrinsic_doc_dict, intrinsic_name):
 
 def gen_csv_data_base(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_intrinsic_doc_dict):
     data = [
-    ['HLSL Intrinsic', 'DXIL Opcode', 'DXIL OpName', "Shader Model", "Shader Model DXC", "Shader Stages", "DXIL Docs", "HLSL Docs"]
+    ['HLSL Intrinsic', 'DXIL Opcode', 'DXIL OpName', "Shader Model", "Shader Model DXC", "Shader Stages", "Shader Category", "DXIL Docs", "HLSL Docs"]
     ]
     
     for key, value in hlsl_to_dxil_op.items():
-        dxil_docs = dxil_op_to_docs[value] if value != -1 else ["","","",""]
+        dxil_docs = dxil_op_to_docs[value] if value != -1 else ["","","","",""]
         hlsl_docs = hlsl_docs_helper(hlsl_intrinsic_doc_dict, key)
-        row = [key, value, dxil_docs[0], hlsl_shader_model_helper(dxil_docs[1],hlsl_docs[1]), dxc_shader_model_helper(dxil_docs[1]), dxil_docs[2], dxil_docs[3], hlsl_docs[0]]
+        row = [key, value, dxil_docs[0], hlsl_shader_model_helper(dxil_docs[1],hlsl_docs[1]), dxc_shader_model_helper(dxil_docs[1]), dxil_docs[2], dxil_docs[3], dxil_docs[4], hlsl_docs[0]]
         data.append(row)
     return data
 
@@ -745,6 +746,15 @@ def get_missing_opcodes_from_docs(hlsl_to_dxil_op, dxil_op_to_docs):
         if value in copied_dxil_op_to_docs:
             del copied_dxil_op_to_docs[value]
     return copied_dxil_op_to_docs
+
+def gen_dxil_ops_as_table(opcodes):
+    data = [
+    ['DXIL Opcode', 'DXIL OpName', "Shader Model DXC", "Shader Category", "Shader Stages", "DXIL Docs"]
+    ]
+    for key, value in opcodes.items():
+        row = [key, value[0], dxc_shader_model_helper(value[1]), value[2], value[3], value[4]]
+        data.append(row)
+    return data
 
 def gen_remaining_opcode_data(hlsl_to_dxil_op, dxil_op_to_docs, semantic_to_dxil_op=None, 
                               rayquery_to_dxil_op=None, wavemat_to_dxil_op=None,
@@ -777,13 +787,18 @@ def gen_remaining_opcode_data(hlsl_to_dxil_op, dxil_op_to_docs, semantic_to_dxil
     if texture_gather_instr_to_opcode:
         rem_opcodes = get_missing_opcodes_from_docs(texture_gather_instr_to_opcode, rem_opcodes)
         
-    data = [
-    ['DXIL Opcode', 'DXIL OpName', "Shader Model DXC", "Shader Stages", "DXIL Docs"]
-    ]
-    for key, value in rem_opcodes.items():
-        row = [key, value[0], dxc_shader_model_helper(value[1]), value[2], value[3]]
-        data.append(row)
-    return data
+    return gen_dxil_ops_as_table(rem_opcodes)
+
+def get_found_ops(dxil_ops, dxil_op_to_docs):
+    found_opcodes = {}
+    for key, value in dxil_ops.items():
+        if value in dxil_op_to_docs:
+           found_opcodes[value] = dxil_op_to_docs[value]
+    return found_opcodes
+
+def gen_found_opcodes(dxil_ops, dxil_op_to_docs):
+    found_opcodes = get_found_ops(dxil_ops, dxil_op_to_docs)
+    return gen_dxil_ops_as_table(found_opcodes)
 
 def gen_arg_semantics(argSemantic : str):
     fn_datastruct = 'RWStructuredBuffer<float> buffer : register(u0);\n'
