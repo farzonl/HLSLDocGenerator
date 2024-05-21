@@ -7,3 +7,9 @@
 [submodule "llvm-project"]
 	path = llvm-project
 	url = https://github.com/llvm/llvm-project.git
+[submodule "DirectX-Specs"]
+	path = DirectX-Specs
+	url = https://github.com/microsoft/DirectX-Specs.git
+[submodule "hlsl-specs"]
+	path = hlsl-specs
+	url = https://github.com/microsoft/hlsl-specs.git
