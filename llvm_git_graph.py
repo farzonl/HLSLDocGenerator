@@ -4,6 +4,7 @@ import pathlib
 from datetime import datetime, timedelta
 import re
 import sys
+from collections import defaultdict
 
 import plotly.graph_objects as go
 
@@ -191,4 +192,101 @@ def get_git_commits(repo_path: str, file_path : str):
         current_date += week_delta
     return file_versions
 
-#llvm_git_hlsl_parser()
+
+
+def get_creation_date(repo, file_path):
+    # Get the first commit for the file
+    commits = list(repo.iter_commits(paths=file_path))
+    if commits:
+        creation_date = datetime.fromtimestamp(commits[-1].committed_date).strftime('%Y-%m-%d %H:%M:%S')
+        return (creation_date, commits[-1].hexsha)
+    else:
+        return None
+
+def get_file_creation_dates(repo_path, rel_folder_path):
+    # Initialize the repository
+    repo = git.Repo(repo_path)
+    folder_path = os.path.join(repo_path, rel_folder_path)
+    assert not repo.bare
+
+    # Dictionary to store creation dates
+    creation_dates = {}
+
+    # Walk through the directory
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            #file_path = os.path.join(root, file)
+            #relative_path = os.path.relpath(file_path, folder_path)
+            rel_path =os.path.join(rel_folder_path, file)
+            creation_date = get_creation_date(repo, rel_path)
+            dict_key = file.split('.ll')[0]
+            if creation_date:
+                # Convert the timestamp to a readable date format
+                creation_dates[dict_key] = creation_date
+            else:
+                creation_dates[dict_key] = 'No commits found'
+
+    return creation_dates
+
+# Example usage
+def get_spirv_intrinsics_created_dates():
+    llvm_path = os.path.join(pathlib.Path().resolve(), 'llvm-project')
+    rel_folder_path = 'llvm/test/CodeGen/SPIRV/hlsl-intrinsics/'
+    creation_dates = get_file_creation_dates(llvm_path, rel_folder_path)
+    
+    return creation_dates
+
+def get_spirv_opNames(hlsl_intrinsic_list):
+    return hlsl_intrinsic_list
+
+def llvm_git_spirv_parser():
+    
+    spirv_opcode_files = get_spirv_intrinsics_created_dates()
+
+    data = [
+    ['Date',  '# of SPIRV Ops', f"% of SPIRV Ops", "HLSL Instrinsic Names", "SPIRVOp Names", "commit id"]
+    ]
+    
+    date_key_list = sorted(
+    [(datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S"), (key, hash)) for key, (date_str, hash) in spirv_opcode_files.items()]
+    )
+    result = defaultdict(list)
+    seen_keys = set()
+    
+    for date, key in date_key_list:
+        seen_keys.add(key[0])
+        result[date.strftime("%Y-%m-%d %H:%M:%S")] = (list(seen_keys), key[1])
+
+    # Note we need a way to check spirv ops, this is a temporary substitute
+    spirv_ops = all_dxil_ops
+    result = dict(result)
+    for date, (hlsl_intrinsics, git_sha) in result.items():
+        num_intrinsics = len(hlsl_intrinsics)
+        row = [date, num_intrinsics, round(100 * (num_intrinsics / len(spirv_ops)),2), ', '.join(hlsl_intrinsics), ', '.join(get_spirv_opNames(hlsl_intrinsics)), git_sha]
+        data.append(row)
+        print_cli(f"Date: {row[0]} opcode count: {num_intrinsics}")
+ 
+    print_cli(f"opcode completion % {data[-1][2]}")
+    return data
+
+
+def llvm_graph_spirv_intrinsics(data=None):
+    if not data:
+        data =  llvm_git_spirv_parser()
+    dates = [date for date, _, _, _, _, _ in data]
+    dxilops = [ dxil_count for _, dxil_count, _, _, _, _ in data]
+    percentages = [  int_per for _, _,  int_per, _, _, _ in data]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=dates, y=dxilops, mode='lines', name='SPIRV Ops'))
+    fig.add_trace(go.Scatter(x=dates, y=percentages, mode='lines', name='SPIRV Ops %'))
+
+    fig.update_layout(title='SPIRV Opcodes Over Time',
+                   xaxis_title='Date',
+                   yaxis_title='# of Completed SPIRV Opcodes',
+                   showlegend=True)
+
+    if is_cli:
+        fig.show()
+    else:
+        fig.write_image("scratch/spirv_fig.png")
+    return fig
