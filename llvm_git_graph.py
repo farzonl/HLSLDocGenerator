@@ -117,7 +117,29 @@ def llvm_git_hlsl_parser():
     
     print_cli(f"intrinsic completion % {data[-1][2]}")
     return data
+
+
+def llvm_hlsl_completed_intrinsics():
+    intrinsics = set()
+    llvm_path = os.path.join(pathlib.Path().resolve(), 'llvm-project')
+    hlsl_intrinsic_rel_path = 'clang/lib/Headers/hlsl/hlsl_intrinsics.h'
+    hlsl_intrinsic_path = os.path.join(llvm_path, hlsl_intrinsic_rel_path)
+    with open(hlsl_intrinsic_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+        intrinsics = set(extract_all_hlsl_intrinsics(content))
     
+    return intrinsics
+
+def llvm_dxil_completed_ops():
+    dxil_ops = set()
+    llvm_path = os.path.join(pathlib.Path().resolve(), 'llvm-project')
+    dxil_opcode_rel_path = 'llvm/lib/Target/DirectX/DXIL.td'
+    dxil_ops_path = os.path.join(llvm_path, dxil_opcode_rel_path)
+    with open(dxil_ops_path, 'r', encoding='utf-8') as file:
+        content = file.read()
+        dxil_ops = set(extract_all_opcodes(content))
+    
+    return dxil_ops
 
 def llvm_git_dxil_parser():
     llvm_path = os.path.join(pathlib.Path().resolve(), 'llvm-project')
