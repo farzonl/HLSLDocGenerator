@@ -2,6 +2,7 @@ api_keys.json
 spec/
 scratch/
 DXC_Debug_BUILD/
+DXC_COV_BUILD/
 .DS_Store
 */__pycache__
 

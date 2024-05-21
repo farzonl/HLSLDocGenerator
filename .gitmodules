@@ -1,6 +1,6 @@
 [submodule "DirectXShaderCompiler"]
 	path = DirectXShaderCompiler
-	url = https://github.com/farzonl/DirectXShaderCompiler.git
+	url = https://github.com/microsoft/DirectXShaderCompiler.git
 [submodule "win32"]
 	path = win32
 	url = https://github.com/farzonl/win32.git
