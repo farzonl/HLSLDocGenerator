@@ -25,5 +25,6 @@ parser.add_argument('-ght, --gen_hull_tests',  dest='gen_hull_tests', action='st
 parser.add_argument('-gnt, --gen_node_tests',  dest='gen_node_tests', action='store_true', default=False)
 parser.add_argument('-bdxc, --build_dxc',  dest='build_dxc', action='store_true', default=False)
 parser.add_argument('-rbdxc, --rebuild_dxc',  dest='rebuild_dxc', action='store_true', default=False)
+parser.add_argument('-cbdxc, --cov_build_dxc',  dest='cov_build_dxc', action='store_true', default=False)
 parser.add_argument('-ghd, --get_hlsl_docs',  dest='get_hlsl_docs', action='store_true', default=False)
 parser.add_argument('-csv, --gen_csv_docs', dest='csv_doc_path', type=str, default=None)

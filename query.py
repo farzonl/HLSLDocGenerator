@@ -111,6 +111,7 @@ float_only_intrinsics = [
     'EvaluateAttributeCentroid',
     'EvaluateAttributeSnapped']
 DXC_PATH = os.path.join(pathlib.Path().resolve(), "DXC_Debug_BUILD/bin/dxc")
+DXC_COV_PATH = os.path.join(pathlib.Path().resolve(), "DXC_COV_BUILD/bin/dxc")
 
 isCli_print = False
 
@@ -603,24 +604,29 @@ def printHLSLDoc():
         f'percentage without docs: {100.0 * (len(intrinsics_no_docs)/ hlsl_intrinsics_count)}%')
 
 
-def build_dxc(rebuild: bool = False):
-    if not rebuild and os.path.exists(DXC_PATH):
+def build_dxc(rebuild: bool = False, cov_build : bool = False):
+    if not rebuild and ((cov_build and os.path.exists(DXC_COV_PATH)) or 
+                        (not cov_build and os.path.exists(DXC_PATH))):
         print("Build Succeeded!")
         return
+    
+    build_dir_name ='DXC_Debug_BUILD'
+    if cov_build:
+        build_dir_name = 'DXC_COV_BUILD' 
 
     if rebuild:
         try:
             shutil.rmtree(
                 os.path.join(
                     pathlib.Path().resolve(),
-                    "DXC_Debug_BUILD"))
+                    build_dir_name))
         except OSError as e:
             print("Error: %s - %s." % (e.filename, e.strerror))
 
     cmake_dxc_build_command = [
         "cmake",
         "-S DirectXShaderCompiler",
-        "-B DXC_Debug_BUILD",
+        f"-B {build_dir_name}",
         "-DCMAKE_C_COMPILER=clang",
         "-DCMAKE_CXX_COMPILER=clang++",
         "-DCMAKE_BUILD_TYPE=Debug",
@@ -628,7 +634,11 @@ def build_dxc(rebuild: bool = False):
         "-G Ninja",
         "-C DirectXShaderCompiler/cmake/caches/PredefinedParams.cmake"
     ]
-    ninja_dxc_build_command = ["ninja", "-C", "DXC_Debug_BUILD"]
+
+    ninja_dxc_build_command = ["ninja", "-C", build_dir_name]
+
+    if cov_build:
+        cmake_dxc_build_command.append('-DLLVM_BUILD_INSTRUMENTED_COVERAGE=TRUE')
 
     result = subprocess.run(
         cmake_dxc_build_command,
@@ -2361,11 +2371,8 @@ def main():
     if args.query_all_dxil:
         query_dxil()
         return 0
-    if args.build_dxc:
-        build_dxc()
-        return 0
-    if args.rebuild_dxc:
-        build_dxc(True)
+    if args.build_dxc or args.rebuild_dxc or args.cov_build_dxc:
+        build_dxc(args.rebuild_dxc, args.cov_build_dxc)
         return 0
     if args.get_hlsl_docs:
         printHLSLDoc()
