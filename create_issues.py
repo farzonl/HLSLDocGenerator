@@ -345,7 +345,7 @@ def replace_md_links_with_hyperlinks(markdown_content, md_file_parent_dir):
     return replaced_content
 
 
-def create_github_issue(title, body):
+def create_github_issue(title, body, labels):
     url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/issues"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
@@ -354,7 +354,7 @@ def create_github_issue(title, body):
     data = {
         "title": title,
         "body": body,
-        "labels": ["HLSL"]
+        "labels": labels
     }
     response = requests.post(url, json=data, headers=headers)
     if response.status_code == 201:
@@ -363,10 +363,39 @@ def create_github_issue(title, body):
         print(f"Failed to create issue: {title}")
         print(f"Response: {response.content}")
 
+def create_github_issue_helper(intrinsic_name, body, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases):
+    if intrinsic_name in hlsl_ignore_intrinsics:
+        return
+    labels = ['HLSL']
+    requirements_body  = f'- [ ] Implement `{intrinsic_name}` clang builtin,\n'
+    requirements_body += f'- [ ] Link `{intrinsic_name}` clang builtin with `hlsl_intrinsics.h`\n'
+    requirements_body += f'- [ ] Add sema checks for `{intrinsic_name}` to `CheckHLSLBuiltinFunctionCall` in `SemaChecking.cpp`\n'
+    requirements_body += f'- [ ] Add codegen for `{intrinsic_name}` to `EmitHLSLBuiltinExpr` in `CGBuiltin.cpp`\n'
+    requirements_body += f'- [ ] Add codegen tests to `clang/test/CodeGenHLSL/builtins/{intrinsic_name}.hlsl`\n'
+    requirements_body += f'- [ ] Add sema tests to `clang/test/SemaHLSL/BuiltIns/{intrinsic_name}-errors.hlsl`\n'
+    dxil_op =  hlsl_to_dxil_op[intrinsic_name]
+    dxil_docs = dxil_op_to_docs[dxil_op] if dxil_op != -1 else ["", "", "", "", ""]
+    dxil_doc_body = ''
+    if dxil_op != -1:
+        requirements_body += f'- [ ] Create the `int_dx_{intrinsic_name}` intrinsic in `IntrinsicsDirectX.td`\n'
+        requirements_body += f'- [ ] Create the `DXILOpMapping` of `int_dx_{intrinsic_name}` to  `{dxil_op}` in `DXIL.td`\n'
+        requirements_body += f'- [ ] Create the  `{intrinsic_name}.ll` and `{intrinsic_name}_errors.ll` tests in `llvm/test/CodeGen/DirectX/`\n'
+
+        dxil_doc_body =    '| DXIL Opcode | DXIL OpName | Shader Model | Shader Stages |'
+        dxil_doc_body += '\n| ----------- | ----------- | ------------ | ------------- |'
+        dxil_doc_body +=  f'\n| {dxil_op} | {dxil_docs[0]} | {dxil_docs[1]} | {dxil_docs[3]} |' 
+        labels.append('backend:DirectX')
+    test_case_body = gen_test_case_body(intrinsic_name, hlsl_intrinsics_test_cases)
+    body = f'{requirements_body}\n{dxil_doc_body}\n{test_case_body}\n{body}' 
+    title = f"Implement the `{intrinsic_name}` HLSL Function"
+    
+    create_github_issue(title, body, labels)
+    # waiting so github doesn't throttle us.
+    time.sleep(5)
+
 def process_markdown_files(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases):
     rel_base_path = "win32/desktop-src/"
-   
-    #for filename in os.listdir(directory):
+    doc_created_intrinsic = []
     for md_file in MD_FILES:
         filepath = os.path.join(pathlib.Path().resolve(),
                                 rel_base_path,
@@ -378,23 +407,20 @@ def process_markdown_files(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_ignore_intrins
             with open(filepath, 'r', encoding='utf-8') as file:
                 content = file.read().split('# ', 1)[-1].split('\n',1)
                 intrinsic_name = filter_escapes(content[0].split(' ', 1)[0].strip())  # First line as title
-                if intrinsic_name in hlsl_ignore_intrinsics:
-                    continue
-                dxil_op =  hlsl_to_dxil_op[intrinsic_name]
-                dxil_docs = dxil_op_to_docs[dxil_op] if dxil_op != -1 else ["", "", "", "", ""]
-                dxil_doc_body = ''
-                if dxil_op != -1:
-                    dxil_doc_body =    '| DXIL Opcode | DXIL OpName | Shader Model | Shader Stages |'
-                    dxil_doc_body += '\n| ----------- | ----------- | ------------ | ------------- |'
-                    dxil_doc_body +=  f'\n| {dxil_op} | {dxil_docs[0]} | {dxil_docs[1]} | {dxil_docs[3]} |' 
-                test_case_body = gen_test_case_body(intrinsic_name, hlsl_intrinsics_test_cases)
                 body = content[1].strip() if len(content) > 1 else ''  # Rest as body
-                body = f'{dxil_doc_body}\n{test_case_body}\n{body}' 
-                title = f"create {intrinsic_name} HLSL Intrinsic"
                 body = replace_md_links_with_hyperlinks(body, md_file_parent_dir)
-                create_github_issue(title, body)
-                # waiting so github doesn't throttle us.
-                time.sleep(5)
+                doc_created_intrinsic.append(intrinsic_name)
+                create_github_issue_helper(intrinsic_name, body, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases)
+
+    emptyBody = ''           
+    for hl_op in db_hlsl.intrinsics:
+        if (hl_op.ns != "Intrinsics" or hl_op.name in deprecated_intrinsics or
+                hl_op.name in hidden_intrinsics):
+            continue
+        if  hl_op.name in doc_created_intrinsic:
+            continue
+        create_github_issue_helper( hl_op.name, emptyBody, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases)
+
 
 # Function to serialize the dictionary
 def serialize_dict(dictionary, file_path):
