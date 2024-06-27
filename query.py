@@ -26,33 +26,6 @@ shader_semantic_filepath = os.path.join(
     pathlib.Path().resolve(),
     'win32/desktop-src/direct3dhlsl/dx-graphics-hlsl-semantics.md')
 
-deprecated_intrinsics = [
-    "abort",
-    "determinant",
-    "sincos",
-    "source_mark",
-    "tex1D",
-    "tex1Dbias",
-    "tex1Dgrad",
-    "tex1Dlod",
-    "tex1Dproj",
-    "tex2D",
-    "tex2Dbias",
-    "tex2Dgrad",
-    "tex2Dlod",
-    "tex2Dproj",
-    "tex3D",
-    "tex3Dbias",
-    "tex3Dgrad",
-    "tex3Dlod",
-    "tex3Dproj",
-    "texCUBE",
-    "texCUBEbias",
-    "texCUBEgrad",
-    "texCUBElod",
-    "texCUBEproj",
-    "transpose"]
-
 pixel_intrinsics = [
     "GetRenderTargetSampleCount",
     "GetRenderTargetSamplePosition",
@@ -67,6 +40,15 @@ pixel_intrinsics_special = [
     "EvaluateAttributeAtSample",
     "EvaluateAttributeCentroid",
     "EvaluateAttributeSnapped"]
+
+def gen_deprecated_intrinsics():
+    intrinsic_def_path = 'DirectXShaderCompiler/lib/HLSL/HLOperationLower.cpp' 
+    pattern = r'IntrinsicOp::IOP_(\w+),\s*EmptyLower'
+    with open(intrinsic_def_path, 'r') as int_file:
+        int_def = int_file.read()
+        matches = re.findall(pattern, int_def)
+        return matches
+
 
 any_hit_intrinsics = ["IgnoreHit", "AcceptHitAndEndSearch"]
 
@@ -729,7 +711,7 @@ def run_dxc():
         "-enable-16bit-types",
         "-O0"
     ]
-
+    deprecated_intrinsics = gen_deprecated_intrinsics()
     intrinsic_to_opcode = {}
     fail_list = []
     name_count = {}
