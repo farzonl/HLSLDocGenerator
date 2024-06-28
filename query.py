@@ -27,19 +27,19 @@ shader_semantic_filepath = os.path.join(
     'win32/desktop-src/direct3dhlsl/dx-graphics-hlsl-semantics.md')
 
 pixel_intrinsics = [
-    "GetRenderTargetSampleCount",
-    "GetRenderTargetSamplePosition",
-    "clip",
-    "GetAttributeAtVertex",
-    "CheckAccessFullyMapped",
-    "EvaluateAttributeAtSample",
-    "EvaluateAttributeCentroid",
-    "EvaluateAttributeSnapped"]
+    'GetRenderTargetSampleCount',
+    'GetRenderTargetSamplePosition',
+    'clip',
+    'GetAttributeAtVertex',
+    'CheckAccessFullyMapped',
+    'EvaluateAttributeAtSample',
+    'EvaluateAttributeCentroid',
+    'EvaluateAttributeSnapped']
 
 pixel_intrinsics_special = [
-    "EvaluateAttributeAtSample",
-    "EvaluateAttributeCentroid",
-    "EvaluateAttributeSnapped"]
+    'EvaluateAttributeAtSample',
+    'EvaluateAttributeCentroid',
+    'EvaluateAttributeSnapped']
 
 def gen_deprecated_intrinsics():
     intrinsic_def_path = 'DirectXShaderCompiler/lib/HLSL/HLOperationLower.cpp' 
@@ -50,15 +50,15 @@ def gen_deprecated_intrinsics():
         return matches
 
 
-any_hit_intrinsics = ["IgnoreHit", "AcceptHitAndEndSearch"]
+any_hit_intrinsics = ['IgnoreHit', 'AcceptHitAndEndSearch']
 
-node_intrinsics = ["GetRemainingRecursionLevels"]
+node_intrinsics = ['GetRemainingRecursionLevels']
 
-hidden_intrinsics = ["CreateResourceFromHeap", "AllocateRayQuery"]
+hidden_intrinsics = ['CreateResourceFromHeap', 'AllocateRayQuery']
 
-mesh_intrinsics = ["SetMeshOutputCounts"]
+mesh_intrinsics = ['SetMeshOutputCounts']
 
-amplification_intrinsics = ["DispatchMesh"]
+amplification_intrinsics = ['DispatchMesh']
 
 hull_intrinsics = [
     'Process2DQuadTessFactorsAvg',
@@ -72,15 +72,50 @@ hull_intrinsics = [
     'ProcessTriTessFactorsMax',
     'ProcessTriTessFactorsMin']
 
-const_intrinsitcs = ["Barrier"]
+const_intrinsitcs = ['Barrier']
 
-raygeneration_intrinsics = ["TraceRay"]
+raygeneration_intrinsics = ['TraceRay']
 
-intrinsic_to_dxil_map = {"TraceRay": "traceRay",
-                         "InterlockedExchange": "atomicBinOp",
-                         "InterlockedAnd": "annotateHandle",
-                         "CheckAccessFullyMapped": "checkAccessFullyMapped",
-                         "InterlockedCompareStore": "atomicCompareExchange"
+intrinsic_to_spirv_map = { 'printf' : r'NonSemantic\.DebugPrintf', 'D3DCOLORtoUBYTE4': 'OpConvertFToS',
+                           'AllMemoryBarrier': 'OpMemoryBarrier', 'countbits': 'OpBitCount',
+                           'AllMemoryBarrierWithGroupSync': 'OpControlBarrier', 'fmod': 'OpFRem',
+                           'IsHelperLane': 'OpIsHelperInvocationEXT', 'DeviceMemoryBarrierWithGroupSync': 'OpControlBarrier',
+                           'mul' : 'OpFMul', 'mul_1' : 'OpVectorTimesScalar', 'mul_2' : 'OpMatrixTimesScalar',
+                           'mul_3' : 'OpVectorTimesScalar', 'mul_4' : 'OpDot', 'mul_5' : 'OpMatrixTimesVector',
+                           'mul_6' : 'OpMatrixTimesScalar', 'mul_7' : 'OpVectorTimesMatrix', 
+                           'mul_8' : 'OpMatrixTimesMatrix', 'ddx' : 'OpDPdx', 'ddx_coarse': 'OpDPdxCoarse',
+                           'ddx_fine': 'OpDPdxFine', 'ddy' : 'OpDPdy', 'ddy_coarse': 'OpDPdyCoarse',
+                           'ddy_fine': 'OpDPdyFine', 'DeviceMemoryBarrier': 'OpMemoryBarrier', 
+                           'GroupMemoryBarrier': 'OpMemoryBarrier', 'GroupMemoryBarrierWithGroupSync': 'OpControlBarrier',
+                           'InterlockedAdd': 'OpAtomicIAdd', 'InterlockedAnd' : 'OpAtomicAnd', 'InterlockedOr' : 'OpAtomicOr',
+                           'InterlockedXor' : 'OpAtomicXor', 'InterlockedMin': 'OpAtomicSMin', 'InterlockedMax': 'OpAtomicSMax',
+                           'InterlockedCompareStore': 'OpAtomicCompareExchange', 'InterlockedCompareExchange': 'OpAtomicCompareExchange',
+                           'InterlockedExchange' : 'OpAtomicExchange', 'dot2add' : 'OpDot', 'dot4add_i8packed': 'OpSDot',
+                           'dot4add_u8packed': 'OpUDot','dst' : 'OpFMul', 'isnan': 'OpIsNan', 'isinf': 'OpIsInf',
+                           'CallShader': 'OpExecuteCallableKHR', 'ReportHit': 'OpReportIntersectionKHR', 'reversebits': 'OpBitReverse',
+                           'WaveIsFirstLane': 'OpGroupNonUniformElect', 'WaveActiveAnyTrue': 'OpGroupNonUniformAny',
+                           'WaveActiveAllTrue': 'OpGroupNonUniformAll',  'WaveActiveAllEqual': 'OpGroupNonUniformAllEqual',
+                           'WaveActiveBallot': 'OpGroupNonUniformBallot', 'WaveReadLaneAt' : 'OpGroupNonUniformShuffle',
+                           'WaveReadLaneFirst': 'OpGroupNonUniformBroadcastFirst', 'WaveActiveCountBits': 'OpGroupNonUniformBallotBitCount',
+                           'WaveActiveSum': 'OpGroupNonUniformFAdd', 'WaveActiveProduct': 'OpGroupNonUniformFMul',
+                            'WaveActiveBitAnd': 'OpGroupNonUniformBitwiseAnd', 'WaveActiveBitOr': 'OpGroupNonUniformBitwiseOr', 
+                            'WaveActiveBitXor': 'OpGroupNonUniformBitwiseXor', 'WaveActiveMin': 'OpGroupNonUniformFMin', 
+                            'WaveActiveMax': 'OpGroupNonUniformFMax', 'WavePrefixCountBits': 'OpGroupNonUniformBallotBitCount',
+                            'WavePrefixSum': 'OpGroupNonUniformFAdd', 'WavePrefixProduct' : 'OpGroupNonUniformFMul',
+                            'WaveMatch': 'OpGroupNonUniformPartitionNV', 'WaveMultiPrefixBitAnd': 'OpGroupNonUniformBitwiseAnd',
+                            "WaveMultiPrefixBitOr": 'OpGroupNonUniformBitwiseOr', "WaveMultiPrefixBitXor": 'OpGroupNonUniformBitwiseXor', 
+                            "WaveMultiPrefixProduct": 'OpGroupNonUniformFMul', "WaveMultiPrefixSum": 'OpGroupNonUniformFAdd',
+                            'QuadReadLaneAt': 'OpGroupNonUniformQuadBroadcast', 'QuadReadAcrossX': 'OpGroupNonUniformQuadSwap',
+                            'QuadReadAcrossY': 'OpGroupNonUniformQuadSwap', 'QuadReadAcrossDiagonal': 'OpGroupNonUniformQuadSwap'
+
+
+                         }
+
+intrinsic_to_dxil_map = {'TraceRay': 'traceRay',
+                         'InterlockedExchange': 'atomicBinOp',
+                         'InterlockedAnd': 'annotateHandle',
+                         'CheckAccessFullyMapped': 'checkAccessFullyMapped',
+                         'InterlockedCompareStore': 'atomicCompareExchange'
                          }
 
 # docs say these are numeric, but they are not
@@ -92,8 +127,8 @@ float_only_intrinsics = [
     'EvaluateAttributeAtSample',
     'EvaluateAttributeCentroid',
     'EvaluateAttributeSnapped']
-DXC_PATH = os.path.join(pathlib.Path().resolve(), "DXC_Debug_BUILD/bin/dxc")
-DXC_COV_PATH = os.path.join(pathlib.Path().resolve(), "DXC_COV_BUILD/bin/dxc")
+DXC_PATH = os.path.join(pathlib.Path().resolve(), 'DXC_Debug_BUILD/bin/dxc')
+DXC_COV_PATH = os.path.join(pathlib.Path().resolve(), 'DXC_COV_BUILD/bin/dxc')
 
 isCli_print = False
 
@@ -116,15 +151,15 @@ type_qualifer_arr = ['f', 'u', 'i']
 def print_cli(*args, **kwargs):
     global isCli_print
     if isCli_print:
-        print(" ".join(map(str, args)), **kwargs)
+        print(' '.join(map(str, args)), **kwargs)
 
 
 def md_table_to_dict(md_file):
     html_content = pypandoc.convert_file(
         md_file,
-        "html",
-        format="markdown",
-        extra_args=["--standalone"])
+        'html',
+        format='markdown',
+        extra_args=['--standalone'])
 
     # print(html_content)
 
@@ -153,14 +188,8 @@ def md_table_to_dict(md_file):
 
     return data
 
-# def remove_trailing_num(s):
-#    pattern = r'_\d+$'
-#    return re.sub(pattern, '', s)
-
-
-def extract_opcode(hl_op_name, line):
+def extract_dxil_opcode(hl_op_name, line):
     match = re.search(r'@dx\.op\..*\(i32\s*(?P<int_opcode>\d+)', line)
-    # hl_op_name = remove_trailing_num(hl_op_name)
     if hl_op_name in intrinsic_to_dxil_map:
         match = re.search(r'@dx\.op\.' +
                           intrinsic_to_dxil_map[hl_op_name] +
@@ -170,33 +199,67 @@ def extract_opcode(hl_op_name, line):
     else:
         return None
 
+def capitalize_and_Op_prefix(word):
+    if not word:
+        return 'Op'
+    capitalized_word = word[0].upper() + word[1:]
+    return 'Op' + capitalized_word
 
-def get_valid_llvm_type(type_name: str, param_name: str = ""):
-    if type_name == "i32" or type_name == "i8":
-        return "int"
-    if type_name == "f" or type_name == "$o":
-        return "float"
-    if type_name == "i1":
-        return "bool"
-    if type_name == "v":
-        return "void"
+def remove_trailing_num(s):
+   pattern = r'_\d+$'
+   return re.sub(pattern, '', s)
+
+def extract_spirv_opcode(hl_op_name, line):
+    match = re.search(r'OpExtInst\s+%\w+\s+%\w+\s+(?P<word_opcode>\w+)\s+%\w+', line)
+    if match:
+        return match.group('word_opcode')
+    
+    base_case_hl_op_name = remove_trailing_num(hl_op_name)
+
+    match = re.search(r'' +capitalize_and_Op_prefix(base_case_hl_op_name), line)
+    if match:
+        return match.group(0)
+    
+    if hl_op_name in intrinsic_to_spirv_map:
+        match = re.search(r'' +
+                          intrinsic_to_spirv_map[hl_op_name], line)
+        if match:
+            return match.group(0)
+    
+    if base_case_hl_op_name in intrinsic_to_spirv_map:
+        match = re.search(r'' +
+                          intrinsic_to_spirv_map[base_case_hl_op_name], line)
+        if match:
+            return match.group(0)
+    else:
+        return None
+
+def get_valid_llvm_type(type_name: str, param_name: str = ''):
+    if type_name == 'i32' or type_name == 'i8':
+        return 'int'
+    if type_name == 'f' or type_name == '$o':
+        return 'float'
+    if type_name == 'i1':
+        return 'bool'
+    if type_name == 'v':
+        return 'void'
     # handle
-    if type_name == "res":
-        if param_name == "accelerationStructure":
-            return "RaytracingAccelerationStructure"
-        if param_name == "rawBuf":
-            return "RWByteAddressBuffer"
-    if type_name == "$gsptr":
-        return "groupshared float"
-    if (type_name == "waveMat" and (param_name == "waveMatrixLeft"
-                                    or param_name == "waveMatrixInput")):
-        return "WaveMatrixLeft<float, 16, 16>"
-    if type_name == "waveMat" and param_name == "waveMatrixRight":
-        return "WaveMatrixRight<float, 16, 16>"
-    if type_name == "waveMat" and param_name == "waveMatrixFragment":
-        return "WaveMatrixLeftColAcc<float, 16, 16>"
-    if type_name == "waveMat" and param_name == "waveMatrixAccumulatorOrFragment":
-        return "WaveMatrixAccumulator<float, 16, 16>"
+    if type_name == 'res':
+        if param_name == 'accelerationStructure':
+            return 'RaytracingAccelerationStructure'
+        if param_name == 'rawBuf':
+            return 'RWByteAddressBuffer'
+    if type_name == '$gsptr':
+        return 'groupshared float'
+    if (type_name == 'waveMat' and (param_name == 'waveMatrixLeft'
+                                    or param_name == 'waveMatrixInput')):
+        return 'WaveMatrixLeft<float, 16, 16>'
+    if type_name == 'waveMat' and param_name == 'waveMatrixRight':
+        return 'WaveMatrixRight<float, 16, 16>'
+    if type_name == 'waveMat' and param_name == 'waveMatrixFragment':
+        return 'WaveMatrixLeftColAcc<float, 16, 16>'
+    if type_name == 'waveMat' and param_name == 'waveMatrixAccumulatorOrFragment':
+        return 'WaveMatrixAccumulator<float, 16, 16>'
 
 
 def get_valid_type(type_name: str, type_index: TypeIndex = TypeIndex.FloatType,
@@ -415,10 +478,16 @@ def generate_amplification(func_name, params, type_index: TypeIndex):
     payload = f"{fn_attr}\n{fn_sig}\n{arg_list}\n{func_call}"
     return payload
 
+def generate_pixel_spirv(func_name, params, type_index: TypeIndex):
+    return generate_pixel(func_name, params, type_index)
 
-def generate_pixel(func_name, params, type_index: TypeIndex):
-    global_attr = ""
+def generate_pixel_dxil(func_name, params, type_index: TypeIndex):
     fn_attr = '[numthreads(1, 1, 1)]\n[shader("pixel")]'
+    return generate_pixel(func_name, params, type_index,fn_attr)
+
+def generate_pixel(func_name, params, type_index: TypeIndex, fn_attr: str =''):
+    global_attr = ""
+    
     return_type = params[0].type_name
     signature = f"{get_valid_type(return_type, type_index)} fn("
     if func_name == "GetAttributeAtVertex":
@@ -460,12 +529,12 @@ def generate_pixel(func_name, params, type_index: TypeIndex):
     return payload
 
 
-def generate_hull(func_name, params, type_index: TypeIndex):
+def generate_hull(func_name, params, type_index: TypeIndex, is_spirv):
     hs_per_patch_data = 'struct HSPerPatchData\n{\n\tfloat edges[ 3 ] : SV_TessFactor;\n\tfloat inside : SV_InsideTessFactor;\n};\n'
     ps_scene_in = 'struct PSSceneIn {\n\tfloat4 pos : SV_Position;\n\tfloat2 tex : TEXCOORD0;\n\tfloat3 norm : NORMAL;\n};\n'
     hs_per_vertex_data = 'struct HSPerVertexData {\n\tPSSceneIn v;\n};\n'
     data_structures = f'{hs_per_patch_data}{ps_scene_in}{hs_per_vertex_data}'
-    main_fn_attr = '[domain("tri")]\n[outputtopology("triangle_cw")]\n[patchconstantfunc("fn")]\n[outputcontrolpoints(3)]\n[partitioning("pow2")]'
+    main_fn_attr = f'[domain("tri")]\n[outputtopology("triangle_cw")]\n[patchconstantfunc("fn")]\n[outputcontrolpoints(3)]\n[partitioning({"\"integer\"" if is_spirv else "\"pow2\""})]'
     main_fn_sig = 'HSPerVertexData main( const uint id : SV_OutputControlPointID,const InputPatch< PSSceneIn, 3 > points ) {'
     main_fn_body = '\n\tHSPerVertexData v;\n\tv.v = points[ id ];\n\treturn v;\n}'
 
@@ -513,7 +582,8 @@ def generate_scratch_file(
         func_name: str,
         params,
         type_index: TypeIndex = TypeIndex.FloatType,
-        vec_length: VecLength = VecLength.Vec4):
+        vec_length: VecLength = VecLength.Vec4,
+        is_spirv: bool = False):
     if func_name.startswith("Interlocked"):
         return generate_interlocked(func_name, params, type_index)
     if func_name in any_hit_intrinsics:
@@ -525,12 +595,14 @@ def generate_scratch_file(
     if func_name in amplification_intrinsics:
         return generate_amplification(func_name, params, type_index)
     if func_name in pixel_intrinsics:
-        return generate_pixel(func_name, params, type_index)
+        return generate_pixel_dxil(func_name, params, type_index)
+    if is_spirv and func_name in vulkan_pixel_shader:
+        return generate_pixel_spirv(func_name, params, type_index)
     if func_name in hull_intrinsics:
-        return generate_hull(func_name, params, type_index)
-    if func_name in raygeneration_intrinsics:
+        return generate_hull(func_name, params, type_index, is_spirv)
+    if func_name in raygeneration_intrinsics or (is_spirv and  func_name in vulkan_raygeneration):
         return generate_raygeneration(func_name, params, type_index)
-
+    
     rayPayload = "struct RayPayload\n{\n\tfloat4 color;\n\tfloat distance;\n};"
     rayPayloadInserted = False
     return_type = params[0].type_name
@@ -538,6 +610,8 @@ def generate_scratch_file(
     arg_length = len(params)
     if func_name == "printf":
         arg_length = arg_length - 1
+        if is_spirv:
+            arg_length = 0
     if func_name in const_intrinsitcs:
         signature = signature + ") {\n"
         for i in range(1, arg_length):
@@ -560,6 +634,8 @@ def generate_scratch_file(
     func_call = f"return {func_name}("
     for i in range(1, arg_length):
         func_call += f"p{i}, "
+    if is_spirv and func_name == "printf":
+        func_call +="\"Hello World\""
     func_call = func_call.rstrip(", ") + ");\n}"
 
     # Generate the payload
@@ -664,14 +740,23 @@ def check_for_numeric_params(hl_op):
     return numeric_found
 
 
-def run_hlsl_test(dxc_command, hlsl_name, hlsl_construct_to_opcode, fail_list):
+def run_hlsl_test(dxc_command, hlsl_name, hlsl_construct_to_opcode, fail_list, is_spirv=False):
     result = subprocess.run(dxc_command, capture_output=True, text=True)
     if result.returncode == 0:
-        opcode = extract_opcode(hlsl_name, result.stdout)
+        opcode = None
+        if is_spirv:
+            opcode = extract_spirv_opcode(hlsl_name, result.stdout)
+        else:
+            opcode = extract_dxil_opcode(hlsl_name, result.stdout)
+        #if hlsl_name == 'QuadReadAcrossDiagonal':
+        #    print(opcode)
+        #    print(result.stdout)
+        #    exit(0)
         if (opcode is None):
             hlsl_construct_to_opcode[hlsl_name] = -1
         else:
-            opcode = int(opcode)
+            if not is_spirv:
+                opcode = int(opcode)
             hlsl_construct_to_opcode[hlsl_name] = opcode
     else:
         print_cli(result.stderr)
@@ -698,9 +783,33 @@ def dxc_intrinsic_run_helper(
     write_payload(scratchpad, payload)
     run_hlsl_test(dxc_command, hl_op_name, intrinsic_to_opcode, fail_list)
 
+
+def dxc_intrinsic_spirv_run_helper(
+        hl_op,
+        dxc_command,
+        scratchpad_path,
+        hl_op_name,
+        intrinsic_to_opcode,
+        fail_list,
+        type_index: TypeIndex = TypeIndex.FloatType,
+        vec_length: VecLength = VecLength.Vec4):
+    scratchpad = os.path.join(scratchpad_path, hl_op_name + "_spirv_test.hlsl")
+    dxc_command[1] = scratchpad
+    if hl_op.name in hull_intrinsics:
+        dxc_command[2] = "-T hs_6_8"
+        dxc_command[3] = "-E main"
+    elif hl_op.name in vulkan_pixel_shader:
+        dxc_command[2] = "-T ps_6_8"
+        dxc_command[3] = "-E fn"
+    else:
+        dxc_command[2] = "-T lib_6_8"
+    payload = generate_scratch_file(
+        hl_op.name, hl_op.params, type_index, vec_length, is_spirv=True)
+    write_payload(scratchpad, payload)
+    run_hlsl_test(dxc_command, hl_op_name, intrinsic_to_opcode, fail_list, is_spirv=True)
+
+
 # Run dxc
-
-
 def run_dxc():
     scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
     os.makedirs(scratchpad_path, exist_ok=True)
@@ -886,12 +995,6 @@ def gen_csv(csv_file_path: str):
     with open(csv_file_path, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerows(data)
-
-# Example usage:
-# line = "%9 = call float @dx.op.dot4.f32(i32 56, float %1, float %2, float %3, float %4, float %5, float %6, float %7, float %8)  ; Dot4(ax,ay,az,aw,bx,by,bz,bw)"
-# opcode = extract_opcode(line)
-# print(opcode)  # Output: 56
-
 
 def get_missing_opcodes_from_docs(hlsl_to_dxil_op, dxil_op_to_docs):
     copied_dxil_op_to_docs = dxil_op_to_docs.copy()
@@ -2298,6 +2401,68 @@ def gen_texture_gather():
         print_cli(texture_gather_instr_to_opcode)
     return texture_gather_instr_to_opcode
 
+no_vulkan_equivalent = ['GetRenderTargetSampleCount', 'GetRenderTargetSamplePosition']
+spirv_unimplemented = [ 'AddUint64', 'WaveMultiPrefixCountBits', 'EvaluateAttributeAtSample',
+                       'EvaluateAttributeCentroid', 'EvaluateAttributeSnapped', 
+                       'InterlockedCompareStoreFloatBitwise', 'InterlockedCompareExchangeFloatBitwise',
+                       'QuadAny', 'QuadAll', 'ObjectToWorld', 'WorldToObject', 'Barrier' ]
+
+spirv_broken = ['asdouble', 'asuint', 'and', 'or']
+
+vulkan_pixel_shader = ['WaveGetLaneCount', 'WaveGetLaneIndex', 'InstanceIndex', 'PrimitiveIndex']
+
+vulkan_raygeneration =  ['DispatchRaysIndex', 'DispatchRaysDimensions', 'WorldRayOrigin', 
+                      'WorldRayDirection', 'ObjectRayOrigin', 'ObjectRayDirection', 
+                      'RayTMin', 'RayTCurrent', 
+                      'HitKind', 'RayFlags', 'ObjectToWorld3x4', 'WorldToObject3x4', 
+                      'ObjectToWorld4x3', 'WorldToObject4x3', 'InstanceID'
+                      ]
+
+def gen_spirv_shader_instr():
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    dxc_command = [
+        DXC_PATH,
+        "<scratchpad_placholder>",
+        "-T lib_6_8",
+        "",
+        "-enable-16bit-types",
+        "-spirv",
+        "-fspv-target-env=universal1.5",
+        "-O0"
+    ]
+    deprecated_intrinsics = gen_deprecated_intrinsics()
+    intrinsic_to_opcode = {}
+    fail_list = []
+    name_count = {}
+    total_intrinsics = 0
+    for hl_op in db_hlsl.intrinsics:
+        if (hl_op.ns != "Intrinsics" or hl_op.name in deprecated_intrinsics or
+                hl_op.name in hidden_intrinsics):
+            continue
+        if (hl_op.name in no_vulkan_equivalent or hl_op.name in spirv_unimplemented):
+            continue
+        # All hull intrinsics are listed as error: intrinsic function unimplemented
+        if hl_op.name in hull_intrinsics or hl_op.name in spirv_broken:
+            continue
+        total_intrinsics = total_intrinsics + 1
+        hl_op_name = get_unique_name(hl_op.name, name_count)
+        dxc_intrinsic_spirv_run_helper(
+                hl_op,
+                dxc_command,
+                scratchpad_path,
+                hl_op_name,
+                intrinsic_to_opcode,
+                fail_list)
+    print_cli(
+        f"success %: {100.0 * ( (total_intrinsics - len(fail_list)) / total_intrinsics)}")
+    if (len(fail_list) > 0):
+        print_cli("FAILED:")
+        print_cli(fail_list)
+
+    return intrinsic_to_opcode
+
+
 
 def main():
     """ Main function used for setting up the cli"""
@@ -2316,6 +2481,9 @@ def main():
         return 0
     if args.gen_intrinsic_tests:
         run_dxc()
+        return 0
+    if args.gen_spirv_intrinsic_tests:
+        gen_spirv_shader_instr()
         return 0
     if args.gen_semantic_tests:
         gen_semantics_hlsl()
