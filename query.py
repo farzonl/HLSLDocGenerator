@@ -98,17 +98,21 @@ intrinsic_to_spirv_map = { 'printf' : r'NonSemantic\.DebugPrintf', 'D3DCOLORtoUB
                            'WaveActiveBallot': 'OpGroupNonUniformBallot', 'WaveReadLaneAt' : 'OpGroupNonUniformShuffle',
                            'WaveReadLaneFirst': 'OpGroupNonUniformBroadcastFirst', 'WaveActiveCountBits': 'OpGroupNonUniformBallotBitCount',
                            'WaveActiveSum': 'OpGroupNonUniformFAdd', 'WaveActiveProduct': 'OpGroupNonUniformFMul',
-                            'WaveActiveBitAnd': 'OpGroupNonUniformBitwiseAnd', 'WaveActiveBitOr': 'OpGroupNonUniformBitwiseOr', 
-                            'WaveActiveBitXor': 'OpGroupNonUniformBitwiseXor', 'WaveActiveMin': 'OpGroupNonUniformFMin', 
-                            'WaveActiveMax': 'OpGroupNonUniformFMax', 'WavePrefixCountBits': 'OpGroupNonUniformBallotBitCount',
-                            'WavePrefixSum': 'OpGroupNonUniformFAdd', 'WavePrefixProduct' : 'OpGroupNonUniformFMul',
-                            'WaveMatch': 'OpGroupNonUniformPartitionNV', 'WaveMultiPrefixBitAnd': 'OpGroupNonUniformBitwiseAnd',
-                            "WaveMultiPrefixBitOr": 'OpGroupNonUniformBitwiseOr', "WaveMultiPrefixBitXor": 'OpGroupNonUniformBitwiseXor', 
-                            "WaveMultiPrefixProduct": 'OpGroupNonUniformFMul', "WaveMultiPrefixSum": 'OpGroupNonUniformFAdd',
-                            'QuadReadLaneAt': 'OpGroupNonUniformQuadBroadcast', 'QuadReadAcrossX': 'OpGroupNonUniformQuadSwap',
-                            'QuadReadAcrossY': 'OpGroupNonUniformQuadSwap', 'QuadReadAcrossDiagonal': 'OpGroupNonUniformQuadSwap'
-
-
+                           'WaveActiveBitAnd': 'OpGroupNonUniformBitwiseAnd', 'WaveActiveBitOr': 'OpGroupNonUniformBitwiseOr', 
+                           'WaveActiveBitXor': 'OpGroupNonUniformBitwiseXor', 'WaveActiveMin': 'OpGroupNonUniformFMin', 
+                           'WaveActiveMax': 'OpGroupNonUniformFMax', 'WavePrefixCountBits': 'OpGroupNonUniformBallotBitCount',
+                           'WavePrefixSum': 'OpGroupNonUniformFAdd', 'WavePrefixProduct' : 'OpGroupNonUniformFMul',
+                           'WaveMatch': 'OpGroupNonUniformPartitionNV', 'WaveMultiPrefixBitAnd': 'OpGroupNonUniformBitwiseAnd',
+                           "WaveMultiPrefixBitOr": 'OpGroupNonUniformBitwiseOr', "WaveMultiPrefixBitXor": 'OpGroupNonUniformBitwiseXor', 
+                           "WaveMultiPrefixProduct": 'OpGroupNonUniformFMul', "WaveMultiPrefixSum": 'OpGroupNonUniformFAdd',
+                           'QuadReadLaneAt': 'OpGroupNonUniformQuadBroadcast', 'QuadReadAcrossX': 'OpGroupNonUniformQuadSwap',
+                           'QuadReadAcrossY': 'OpGroupNonUniformQuadSwap', 'QuadReadAcrossDiagonal': 'OpGroupNonUniformQuadSwap',
+                           'WorldToObject4x3' : 'WorldToObjectKHR', 'WorldToObject3x4' : 'WorldToObjectKHR', 'RayTMin' : 'RayTminKHR',
+                           'ObjectToWorld4x3' : 'ObjectToWorldKHR', 'ObjectToWorld3x4' : 'ObjectToWorldKHR', 'RayTCurrent' : 'RayTmaxKHR',
+                           'WorldRayDirection' : 'WorldRayDirectionKHR', 'WorldRayOrigin' : 'WorldRayOriginKHR', 'HitKind' : 'HitKindKHR',
+                           'ObjectRayOrigin' : 'ObjectRayOriginKHR', 'ObjectRayDirection' : 'ObjectRayDirectionKHR', 'RayFlags' : 'IncomingRayFlagsKHR',
+                           'DispatchRaysIndex' : 'LaunchIdKHR', 'DispatchRaysDimensions' : 'LaunchSizeKHR', 'InstanceID' : 'InstanceCustomIndexKHR',
+                           'GeometryIndex' : 'RayGeometryIndexKHR', 'DispatchMesh' : 'OpEmitMeshTasksEXT', 'SetMeshOutputCounts' : "OpSetMeshOutputsEXT"
                          }
 
 intrinsic_to_dxil_map = {'TraceRay': 'traceRay',
@@ -205,6 +209,13 @@ def capitalize_and_Op_prefix(word):
     capitalized_word = word[0].upper() + word[1:]
     return 'Op' + capitalized_word
 
+def op_prefix_and_ext(word):
+    ret_str = capitalize_and_Op_prefix(word)
+    return ret_str + 'EXT'
+
+def construct_khr_op(word):
+    return word + 'KHR'
+
 def remove_trailing_num(s):
    pattern = r'_\d+$'
    return re.sub(pattern, '', s)
@@ -216,19 +227,25 @@ def extract_spirv_opcode(hl_op_name, line):
     
     base_case_hl_op_name = remove_trailing_num(hl_op_name)
 
-    match = re.search(r'' +capitalize_and_Op_prefix(base_case_hl_op_name), line)
+    match = re.search(capitalize_and_Op_prefix(base_case_hl_op_name), line)
     if match:
         return match.group(0)
     
+    match = re.search(op_prefix_and_ext(base_case_hl_op_name), line)
+    if match:
+        return match.group(0)
+    
+    match = re.search(construct_khr_op(base_case_hl_op_name), line)
+    if match:
+        return match.group(0)
+
     if hl_op_name in intrinsic_to_spirv_map:
-        match = re.search(r'' +
-                          intrinsic_to_spirv_map[hl_op_name], line)
+        match = re.search(intrinsic_to_spirv_map[hl_op_name], line)
         if match:
             return match.group(0)
     
     if base_case_hl_op_name in intrinsic_to_spirv_map:
-        match = re.search(r'' +
-                          intrinsic_to_spirv_map[base_case_hl_op_name], line)
+        match = re.search(intrinsic_to_spirv_map[base_case_hl_op_name], line)
         if match:
             return match.group(0)
     else:
@@ -418,10 +435,12 @@ def generate_node(func_name, params, type_index: TypeIndex):
     return payload
 
 
-def generate_anyhit(func_name, params, type_index: TypeIndex):
+def generate_anyhit(func_name, params, type_index: TypeIndex, is_spirv: bool):
     raypayload = 'struct [raypayload] RayPayload\n{\n\tfloat4 color : write(caller) : read(anyhit);\n\tfloat distance : write(caller) : read(anyhit);\n};\n'
     attributes = 'struct Attributes {\n\tfloat3 barycentrics;\n\tuint primitiveIndex;\n};\n'
-    shader_header = '[shader("anyhit")]\nexport void fn(inout RayPayload payload, in Attributes attributes) {\n'
+    shader_header = '[shader("anyhit")]\n'
+    shader_header +=  f'{"" if is_spirv else "export "}void fn(inout RayPayload payload, in Attributes attributes) '
+    shader_header += '{\n'
     arg_length = len(params)
 
     # Define the function call
@@ -435,11 +454,16 @@ def generate_anyhit(func_name, params, type_index: TypeIndex):
     return payload
 
 
-def generate_mesh(func_name, params, type_index: TypeIndex):
+def generate_mesh(func_name, params, type_index: TypeIndex, is_spirv : bool):
     fn_attr = '[numthreads(1, 1, 1)]\n[outputtopology("triangle")]\n[shader("mesh")]'
-    fn_sig = 'void fn(in uint gi : SV_GroupIndex, in uint vi : SV_ViewID) {\n'
+    fn_sig = 'void fn(in uint gi : SV_GroupIndex, in uint vi : SV_ViewID'
     arg_length = len(params)
-
+    
+    if is_spirv:
+        fn_datastructure = 'struct MeshPerVertex {\n\tfloat4 position : SV_Position;\n};'
+        fn_attr =f'{fn_datastructure}\n{fn_attr}'
+        fn_sig += ',\n\tout vertices MeshPerVertex verts[3], out indices uint3 primitiveInd[3]'
+    fn_sig += ') {\n'
     func_call = f"{func_name}("
     for i in range(1, arg_length):
         type_name = get_valid_type(params[i].type_name, type_index)
@@ -454,18 +478,26 @@ def generate_mesh(func_name, params, type_index: TypeIndex):
     return payload
 
 
-def generate_amplification(func_name, params, type_index: TypeIndex):
+def generate_amplification(func_name, params, type_index: TypeIndex, is_spirv : bool):
     fn_attr = '[numthreads(1, 1, 1)]\n[shader("amplification")]'
-    fn_sig = 'export void fn(uint gtid : SV_GroupIndex) {\n'
+    fn_sig = f'{"" if is_spirv else "export "}'
+    fn_sig += 'void fn(uint gtid : SV_GroupIndex) {\n'
     rayPayload = "struct RayPayload\n{\n\tfloat4 color;\n\tfloat distance;\n};"
+    fn_data_struct = ""
     rayPayloadInserted = False
     arg_length = len(params)
     arg_list = ""
     for i in range(1, arg_length):
         arg_type = get_valid_type(params[i].type_name, type_index)
-        if not rayPayloadInserted and arg_type == "RayPayload":
+        if not is_spirv and not rayPayloadInserted and arg_type == "RayPayload":
+            rayPayloadInserted = True
             arg_list = rayPayload + "\n" + arg_list
-        arg_list += f"{arg_type} p{i};\n"
+        if is_spirv and arg_type == "RayPayload":
+            fn_data_struct = f'groupshared {arg_type} p{i};\n'
+        else:
+            arg_list += f"{arg_type} p{i};\n"
+    if fn_data_struct:
+        fn_data_struct = f'{rayPayload}\n\n{fn_data_struct}\n'
 
     # Define the function call
     func_call = f"{func_name}("
@@ -475,7 +507,7 @@ def generate_amplification(func_name, params, type_index: TypeIndex):
 
     # Generate the payload
     # Generate the payload
-    payload = f"{fn_attr}\n{fn_sig}\n{arg_list}\n{func_call}"
+    payload = f"{fn_data_struct}{fn_attr}\n{fn_sig}\n{arg_list}\n{func_call}"
     return payload
 
 def generate_pixel_spirv(func_name, params, type_index: TypeIndex):
@@ -577,6 +609,27 @@ def generate_raygeneration(func_name, params, type_index: TypeIndex):
     payload = f"{raypayload}\n{shader_header}\n{fn_args}{func_call}"
     return payload
 
+def generate_intersection(func_name, params, type_index: TypeIndex):
+    shader_header = '[shader("intersection")]\nvoid fn() {'
+
+    arg_length = len(params)
+    fn_args = ""
+    for i in range(1, arg_length):
+        arg_type = get_valid_type(params[i].type_name, type_index)
+        fn_args += f"\t{arg_type} p{i};\n"
+
+    func_call = f"{func_name}("
+    for i in range(1, arg_length):
+        func_call += f"p{i}, "
+    func_call = func_call.rstrip(", ") + ");\n}"
+
+    return_type = params[0].type_name
+    if return_type != 'void':
+        func_call = f"{get_valid_type(return_type, type_index)} \tret = " + func_call 
+    else:
+        func_call = f'\t{func_call}'
+    payload = f"{shader_header}\n{fn_args}{func_call}"
+    return payload
 
 def generate_scratch_file(
         func_name: str,
@@ -587,21 +640,23 @@ def generate_scratch_file(
     if func_name.startswith("Interlocked"):
         return generate_interlocked(func_name, params, type_index)
     if func_name in any_hit_intrinsics:
-        return generate_anyhit(func_name, params, type_index)
+        return generate_anyhit(func_name, params, type_index, is_spirv)
     if func_name in node_intrinsics:
         return generate_node(func_name, params, type_index)
     if func_name in mesh_intrinsics:
-        return generate_mesh(func_name, params, type_index)
+        return generate_mesh(func_name, params, type_index, is_spirv)
     if func_name in amplification_intrinsics:
-        return generate_amplification(func_name, params, type_index)
+        return generate_amplification(func_name, params, type_index, is_spirv)
     if func_name in pixel_intrinsics:
         return generate_pixel_dxil(func_name, params, type_index)
     if is_spirv and func_name in vulkan_pixel_shader:
         return generate_pixel_spirv(func_name, params, type_index)
     if func_name in hull_intrinsics:
         return generate_hull(func_name, params, type_index, is_spirv)
-    if func_name in raygeneration_intrinsics or (is_spirv and  func_name in vulkan_raygeneration):
+    if func_name in raygeneration_intrinsics:
         return generate_raygeneration(func_name, params, type_index)
+    if is_spirv and func_name in intersection_intrinsics: 
+        return generate_intersection(func_name, params, type_index)
     
     rayPayload = "struct RayPayload\n{\n\tfloat4 color;\n\tfloat distance;\n};"
     rayPayloadInserted = False
@@ -2405,18 +2460,17 @@ no_vulkan_equivalent = ['GetRenderTargetSampleCount', 'GetRenderTargetSamplePosi
 spirv_unimplemented = [ 'AddUint64', 'WaveMultiPrefixCountBits', 'EvaluateAttributeAtSample',
                        'EvaluateAttributeCentroid', 'EvaluateAttributeSnapped', 
                        'InterlockedCompareStoreFloatBitwise', 'InterlockedCompareExchangeFloatBitwise',
-                       'QuadAny', 'QuadAll', 'ObjectToWorld', 'WorldToObject', 'Barrier' ]
+                       'QuadAny', 'QuadAll', 'ObjectToWorld', 'WorldToObject', 'Barrier', 'GetRemainingRecursionLevels']
 
 spirv_broken = ['asdouble', 'asuint', 'and', 'or']
 
 vulkan_pixel_shader = ['WaveGetLaneCount', 'WaveGetLaneIndex', 'InstanceIndex', 'PrimitiveIndex']
 
-vulkan_raygeneration =  ['DispatchRaysIndex', 'DispatchRaysDimensions', 'WorldRayOrigin', 
-                      'WorldRayDirection', 'ObjectRayOrigin', 'ObjectRayDirection', 
-                      'RayTMin', 'RayTCurrent', 
-                      'HitKind', 'RayFlags', 'ObjectToWorld3x4', 'WorldToObject3x4', 
-                      'ObjectToWorld4x3', 'WorldToObject4x3', 'InstanceID'
-                      ]
+intersection_intrinsics = ['ObjectToWorld3x4', 'WorldToObject3x4', 'ObjectToWorld4x3', 'WorldToObject4x3', 'InstanceID',
+                           'WorldRayDirection', 'WorldRayOrigin', 'ObjectRayOrigin', 'ObjectRayDirection',
+                           'RayTMin', 'RayTCurrent', 'HitKind', 'RayFlags', 'DispatchRaysIndex', 'DispatchRaysDimensions',
+                           'GeometryIndex'
+                          ]
 
 def gen_spirv_shader_instr():
     scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
@@ -2459,7 +2513,7 @@ def gen_spirv_shader_instr():
     if (len(fail_list) > 0):
         print_cli("FAILED:")
         print_cli(fail_list)
-
+    print(intrinsic_to_opcode)
     return intrinsic_to_opcode
 
 
