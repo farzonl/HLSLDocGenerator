@@ -211,6 +211,10 @@ def op_prefix_and_ext(word):
     ret_str = capitalize_and_Op_prefix(word)
     return ret_str + 'EXT'
 
+def op_prefix_and_khr(word):
+    ret_str = capitalize_and_Op_prefix(word)
+    return ret_str + 'KHR'
+
 def construct_khr_op(word):
     return word + 'KHR'
 
@@ -225,15 +229,19 @@ def extract_spirv_opcode(hl_op_name, line):
     
     base_case_hl_op_name = remove_trailing_num(hl_op_name)
 
-    match = re.search(capitalize_and_Op_prefix(base_case_hl_op_name), line)
+    match = re.search(op_prefix_and_khr(base_case_hl_op_name), line)
+    if match:
+        return match.group(0)
+
+    match = re.search(construct_khr_op(base_case_hl_op_name), line)
     if match:
         return match.group(0)
     
     match = re.search(op_prefix_and_ext(base_case_hl_op_name), line)
     if match:
         return match.group(0)
-    
-    match = re.search(construct_khr_op(base_case_hl_op_name), line)
+
+    match = re.search(capitalize_and_Op_prefix(base_case_hl_op_name), line)
     if match:
         return match.group(0)
 
@@ -2511,6 +2519,7 @@ def gen_spirv_shader_instr():
     if (len(fail_list) > 0):
         print_cli("FAILED:")
         print_cli(fail_list)
+    #print(intrinsic_to_opcode)
     return intrinsic_to_opcode
 
 
