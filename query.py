@@ -2511,7 +2511,6 @@ def gen_spirv_shader_instr():
     if (len(fail_list) > 0):
         print_cli("FAILED:")
         print_cli(fail_list)
-    print(intrinsic_to_opcode)
     return intrinsic_to_opcode
 
 

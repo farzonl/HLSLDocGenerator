@@ -54,6 +54,49 @@ def delete_first_line(text):
         return modified_text
     return text
 
+def extract_glsl_tables(soup, url):
+    tables = soup.find_all('tbody')
+    id_to_markdown = {}
+
+    table_header = BeautifulSoup("""
+        <tr>
+        <th>Number</th>
+        <th>Operand 1</th> 
+        <th>Operand 2</th>  
+        <th>Operand 3</th>
+        <th>Operand 4</th>
+        </tr>
+        """, 'html.parser').tr
+
+    for table in tables:
+        trs = table.find_all('tr')
+        table_id = trs[0].find('strong').text.strip()
+        if table_id == 'Extended Instruction Name':
+            continue
+        if not table_id:
+            continue
+    
+        # Check if there are at least 2 <tr> tags
+        if len(trs) > 1:
+            table_tag = soup.new_tag('table')
+            table_tag.append(table_header)
+            tr_copy = copy.copy(trs[1])
+            table_tag.append(tr_copy)
+            trs[1].decompose()
+            trs[0].insert_after(table_tag)
+        
+         # Convert HTML to Markdown
+        markdown = convert_html_to_markdown(table)
+        markdown = f"# {table_id}:\n\n## Description:\n{markdown}\n"
+        markdown =  replace_rel_links_with_hyperlinks(markdown, url)
+
+        id_to_markdown[table_id] = markdown
+    
+    return id_to_markdown
+
+        
+
+
 def extract_tables(soup, url):
     tables = soup.find_all('tbody')
     id_to_markdown = {}
@@ -126,12 +169,25 @@ def convert_html_to_markdown(html_content):
         print(f"Error converting HTML to Markdown: {e}")
         return None
 
-def parse_spirv_spec():
+def parse_spirv_uni_spec():
     url = 'https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html'
     html = fetch_html(url)
     soup = parse_html(html)
     id_to_markdown = extract_tables(soup, url)
     return id_to_markdown
+
+def parse_spirv_glsl_spec():
+    url = 'https://registry.khronos.org/SPIR-V/specs/1.0/GLSL.std.450.html'
+    html = fetch_html(url)
+    soup = parse_html(html)
+    id_to_markdown = extract_glsl_tables(soup, url)
+    return id_to_markdown
+
+def parse_spirv_spec():
+    spirv_doc = parse_spirv_uni_spec()
+    spirv_glsl_doc = parse_spirv_glsl_spec()
+    spirv_doc.update(spirv_glsl_doc)
+    return spirv_doc
 
 def main():
     id_to_markdown = parse_spirv_spec()

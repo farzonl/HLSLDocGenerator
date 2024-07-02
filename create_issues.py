@@ -387,16 +387,16 @@ def create_github_issue_helper(intrinsic_name, body, hlsl_to_dxil_op, dxil_op_to
         dxil_doc_body =    '| DXIL Opcode | DXIL OpName | Shader Model | Shader Stages |'
         dxil_doc_body += '\n| ----------- | ----------- | ------------ | ------------- |'
         dxil_doc_body += f'\n| {dxil_op} | {dxil_docs[0]} | {dxil_docs[1]} | {dxil_docs[3]} |' 
-        doc_body = '## Direct X\n\n' + dxil_doc_body
+        doc_body += '## Direct X\n\n' + dxil_doc_body
         labels.append('backend:DirectX')
     
-    spirv_op =  hlsl_to_spirv_op[intrinsic_name]
+    spirv_op =  hlsl_to_spirv_op.get(intrinsic_name, -1)
     if spirv_op != -1:
         spirv_doc = spirv_op_to_docs[spirv_op]
         requirements_body += f'- [ ] Create the `int_spv_{intrinsic_name}` intrinsic in `IntrinsicsSPIRV.td`\n'
         requirements_body += f'- [ ] In SPIRVInstructionSelector.cpp create the {intrinsic_name} lowering and map  it to `int_spv_{intrinsic_name}` in ` SPIRVInstructionSelector::selectIntrinsic.'
         requirements_body += f'  [ ] Create SPIR-V backend test case in llvm/test/CodeGen/SPIRV/hlsl-intrinsics/{intrinsic_name}.ll'
-        doc_body = '## SPIR-V\n\n' + spirv_doc
+        doc_body += '## SPIR-V\n\n' + spirv_doc
         labels.append('backend:SPIR-V')
     
     test_case_body = gen_test_case_body(intrinsic_name, hlsl_intrinsics_test_cases)
