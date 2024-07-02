@@ -94,8 +94,19 @@ def extract_glsl_tables(soup, url):
     
     return id_to_markdown
 
-        
 
+def check_for_dual_ids(id: str):
+    # Regular expression pattern
+    pattern = r'(\S+NV) \((\S+KHR)\)'
+    
+    match = re.search(pattern, id)
+    if match:
+        return (True, match.group(1), match.group(2))
+    return (False, '', '')
+
+NV_to_KHR_map = { 'OpReportIntersectionNV' : 'OpReportIntersectionKHR',
+                  'OpTypeAccelerationStructureNV' : 'OpTypeAccelerationStructureKHR'
+                }
 
 def extract_tables(soup, url):
     tables = soup.find_all('tbody')
@@ -132,7 +143,18 @@ def extract_tables(soup, url):
         markdown = f"# [{table_id}]({url}#{table_id}):\n\n## Description:\n{markdown}\n"
         markdown =  replace_rel_links_with_hyperlinks(markdown, url)
 
+        #has_ids, id1, id2 = check_for_dual_ids(table_id)
+        #if has_ids:
+        #    id_to_markdown[id1] = markdown
+        #    id_to_markdown[id2] = markdown
+        #    print(f"ids id 1: {id1}  id 2: {id2}")
+        #else:
+        #    id_to_markdown[table_id] = markdown
         id_to_markdown[table_id] = markdown
+        
+        if table_id in NV_to_KHR_map:
+            id_to_markdown[NV_to_KHR_map[table_id]] = markdown
+        
     
     return id_to_markdown
 

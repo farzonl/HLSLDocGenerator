@@ -304,26 +304,65 @@ successfully_created_intrinsics = [
 "QuadReadAcrossX",
 "QuadReadAcrossY",
 "TraceRay",
-#"ReportHit",
-#"CallShader",
-#"IgnoreHit",
-#"AcceptHitAndEndSearch",
-#"DispatchRaysIndex",
-#"DispatchRaysDimensions",
-#"WorldRayOrigin",
-#"WorldRayDirection",
-#"ObjectRayOrigin",
-#"ObjectRayDirection",
-#"RayTMin",
-#"RayTCurrent",
-#"PrimitiveIndex",
-#"InstanceIndex",
-#"HitKind",
-#"RayFlags",
-#"ObjectToWorld3x4",
-#"WorldToObject3x4",
-#"ObjectToWorld4x3",
-#"WorldToObject4x3"
+"ReportHit",
+"CallShader",
+"IgnoreHit",
+"AcceptHitAndEndSearch",
+"DispatchRaysIndex",
+"DispatchRaysDimensions",
+"WorldRayOrigin",
+"WorldRayDirection",
+"ObjectRayOrigin",
+"ObjectRayDirection",
+"RayTMin",
+"RayTCurrent",
+"PrimitiveIndex",
+"InstanceIndex",
+"HitKind",
+"RayFlags",
+"ObjectToWorld3x4",
+"WorldToObject3x4",
+"ObjectToWorld4x3",
+"WorldToObject4x3",
+'asfloat16',
+'asint16',
+'asuint16',
+'GetAttributeAtVertex',
+'InterlockedCompareStoreFloatBitwise',
+'InterlockedCompareExchangeFloatBitwise',
+'CheckAccessFullyMapped',
+'AddUint64',
+'NonUniformResourceIndex',
+'WaveMatch',
+'WaveMultiPrefixBitAnd',
+'WaveMultiPrefixBitOr',
+'WaveMultiPrefixBitXor',
+'WaveMultiPrefixCountBits',
+'WaveMultiPrefixProduct',
+'WaveMultiPrefixSum',
+'QuadAny',
+'QuadAll',
+'InstanceID',
+'GeometryIndex',
+'ObjectToWorld',
+'WorldToObject',
+'dot4add_u8packed',
+'dot4add_i8packed',
+'dot2add',
+'unpack_s8s16',
+'unpack_u8u16',
+'unpack_s8s32',
+'unpack_u8u32',
+'pack_s8',
+'pack_u8',
+'pack_clamp_s8',
+'pack_clamp_u8',
+'SetMeshOutputCounts',
+'DispatchMesh',
+'IsHelperLane',
+'select',
+'Barrier',
+'GetRemainingRecursionLevels'
 ]
 
 MD_PATH_PREFIX = 'https://github.com/MicrosoftDocs/win32/blob/docs/desktop-src/'
@@ -394,12 +433,15 @@ def create_github_issue_helper(intrinsic_name, body, hlsl_to_dxil_op, dxil_op_to
     if spirv_op != -1:
         spirv_doc = spirv_op_to_docs[spirv_op]
         requirements_body += f'- [ ] Create the `int_spv_{intrinsic_name}` intrinsic in `IntrinsicsSPIRV.td`\n'
-        requirements_body += f'- [ ] In SPIRVInstructionSelector.cpp create the {intrinsic_name} lowering and map  it to `int_spv_{intrinsic_name}` in ` SPIRVInstructionSelector::selectIntrinsic.\n'
-        requirements_body += f'  [ ] Create SPIR-V backend test case in llvm/test/CodeGen/SPIRV/hlsl-intrinsics/{intrinsic_name}.ll\n'
+        requirements_body += f'- [ ] In SPIRVInstructionSelector.cpp create the {intrinsic_name} lowering and map  it to `int_spv_{intrinsic_name}` in `SPIRVInstructionSelector::selectIntrinsic`.\n'
+        requirements_body += f'- [ ] Create SPIR-V backend test case in `llvm/test/CodeGen/SPIRV/hlsl-intrinsics/{intrinsic_name}.ll`\n'
         doc_body += '\n## SPIR-V\n\n' + spirv_doc + '\n'
         labels.append('backend:SPIR-V')
     
-    test_case_body = gen_test_case_body(intrinsic_name, hlsl_intrinsics_test_cases)
+    if body != '':
+        body = f'## HLSL:\n\n{body}'
+
+    test_case_body = f'## Test Case(s)\n\n {gen_test_case_body(intrinsic_name, hlsl_intrinsics_test_cases)}'
     body = f'{requirements_body}\n{doc_body}\n{test_case_body}\n{body}' 
     title = f"Implement the `{intrinsic_name}` HLSL Function"
     
@@ -436,7 +478,8 @@ def process_markdown_files(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_ignore_intrins
             continue
         if  hl_op.name in doc_created_intrinsic:
             continue
-        create_github_issue_helper( hl_op.name, emptyBody, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases)
+        create_github_issue_helper( hl_op.name, emptyBody, hlsl_to_dxil_op, dxil_op_to_docs, 
+                                   hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases,hlsl_to_spirv_op, spirv_op_to_docs)
 
 
 # Function to serialize the dictionary
@@ -510,7 +553,7 @@ if __name__ == "__main__":
     hlsl_completed_intrinsics = llvm_hlsl_completed_intrinsics()
     dxil_completed_ops = llvm_dxil_completed_ops()
     dxil_op_to_docs = query_dxil()
-    hlsl_ignore_intrinsics = ['errorf', 'noise', 'printf', 'InstanceId']
+    hlsl_ignore_intrinsics = ['errorf', 'noise', 'printf', 'InstanceId', 'and', 'or']
     hlsl_ignore_intrinsics.extend(deprecated_intrinsics)
     hlsl_ignore_intrinsics.extend(hlsl_completed_intrinsics)
     hlsl_ignore_intrinsics.extend(successfully_created_intrinsics)
