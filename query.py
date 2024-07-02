@@ -107,10 +107,8 @@ intrinsic_to_spirv_map = { 'printf' : r'NonSemantic\.DebugPrintf', 'D3DCOLORtoUB
                            "WaveMultiPrefixProduct": 'OpGroupNonUniformFMul', "WaveMultiPrefixSum": 'OpGroupNonUniformFAdd',
                            'QuadReadLaneAt': 'OpGroupNonUniformQuadBroadcast', 'QuadReadAcrossX': 'OpGroupNonUniformQuadSwap',
                            'QuadReadAcrossY': 'OpGroupNonUniformQuadSwap', 'QuadReadAcrossDiagonal': 'OpGroupNonUniformQuadSwap',
-                           'WorldToObject4x3' : 'WorldToObjectKHR', 'WorldToObject3x4' : 'WorldToObjectKHR', 'RayTMin' : 'RayTminKHR',
+                           'WorldToObject4x3' : 'WorldToObjectKHR', 'WorldToObject3x4' : 'WorldToObjectKHR', 'RayFlags' : 'IncomingRayFlagsKHR',
                            'ObjectToWorld4x3' : 'ObjectToWorldKHR', 'ObjectToWorld3x4' : 'ObjectToWorldKHR', 'RayTCurrent' : 'RayTmaxKHR',
-                           'WorldRayDirection' : 'WorldRayDirectionKHR', 'WorldRayOrigin' : 'WorldRayOriginKHR', 'HitKind' : 'HitKindKHR',
-                           'ObjectRayOrigin' : 'ObjectRayOriginKHR', 'ObjectRayDirection' : 'ObjectRayDirectionKHR', 'RayFlags' : 'IncomingRayFlagsKHR',
                            'DispatchRaysIndex' : 'LaunchIdKHR', 'DispatchRaysDimensions' : 'LaunchSizeKHR', 'InstanceID' : 'InstanceCustomIndexKHR',
                            'GeometryIndex' : 'RayGeometryIndexKHR', 'DispatchMesh' : 'OpEmitMeshTasksEXT', 'SetMeshOutputCounts' : "OpSetMeshOutputsEXT"
                          }

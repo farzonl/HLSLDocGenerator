@@ -3,8 +3,9 @@ import requests
 import pathlib
 import pickle
 import re
-from query import run_dxc, db_hlsl, gen_deprecated_intrinsics, hidden_intrinsics, query_dxil
+from query import run_dxc, db_hlsl, gen_deprecated_intrinsics, hidden_intrinsics, query_dxil, gen_spirv_shader_instr
 from llvm_git_graph import llvm_hlsl_completed_intrinsics, llvm_dxil_completed_ops
+from spirv_doc_fetch import parse_spirv_spec
 from utils import ApiKeys
 import time
 
@@ -363,7 +364,9 @@ def create_github_issue(title, body, labels):
         print(f"Failed to create issue: {title}")
         print(f"Response: {response.content}")
 
-def create_github_issue_helper(intrinsic_name, body, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases):
+def create_github_issue_helper(intrinsic_name, body, hlsl_to_dxil_op, dxil_op_to_docs, 
+                               hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases,
+                               hlsl_to_spirv_op, spirv_op_to_docs):
     if intrinsic_name in hlsl_ignore_intrinsics:
         return
     labels = ['HLSL']
@@ -374,26 +377,38 @@ def create_github_issue_helper(intrinsic_name, body, dxil_op_to_docs, hlsl_ignor
     requirements_body += f'- [ ] Add codegen tests to `clang/test/CodeGenHLSL/builtins/{intrinsic_name}.hlsl`\n'
     requirements_body += f'- [ ] Add sema tests to `clang/test/SemaHLSL/BuiltIns/{intrinsic_name}-errors.hlsl`\n'
     dxil_op =  hlsl_to_dxil_op[intrinsic_name]
-    dxil_docs = dxil_op_to_docs[dxil_op] if dxil_op != -1 else ["", "", "", "", ""]
-    dxil_doc_body = ''
+    doc_body = ''
     if dxil_op != -1:
+        dxil_docs = dxil_op_to_docs[dxil_op]
         requirements_body += f'- [ ] Create the `int_dx_{intrinsic_name}` intrinsic in `IntrinsicsDirectX.td`\n'
         requirements_body += f'- [ ] Create the `DXILOpMapping` of `int_dx_{intrinsic_name}` to  `{dxil_op}` in `DXIL.td`\n'
         requirements_body += f'- [ ] Create the  `{intrinsic_name}.ll` and `{intrinsic_name}_errors.ll` tests in `llvm/test/CodeGen/DirectX/`\n'
 
         dxil_doc_body =    '| DXIL Opcode | DXIL OpName | Shader Model | Shader Stages |'
         dxil_doc_body += '\n| ----------- | ----------- | ------------ | ------------- |'
-        dxil_doc_body +=  f'\n| {dxil_op} | {dxil_docs[0]} | {dxil_docs[1]} | {dxil_docs[3]} |' 
+        dxil_doc_body += f'\n| {dxil_op} | {dxil_docs[0]} | {dxil_docs[1]} | {dxil_docs[3]} |' 
+        doc_body = '## Direct X\n\n' + dxil_doc_body
         labels.append('backend:DirectX')
+    
+    spirv_op =  hlsl_to_spirv_op[intrinsic_name]
+    if spirv_op != -1:
+        spirv_doc = spirv_op_to_docs[spirv_op]
+        requirements_body += f'- [ ] Create the `int_spv_{intrinsic_name}` intrinsic in `IntrinsicsSPIRV.td`\n'
+        requirements_body += f'- [ ] In SPIRVInstructionSelector.cpp create the {intrinsic_name} lowering and map  it to `int_spv_{intrinsic_name}` in ` SPIRVInstructionSelector::selectIntrinsic.'
+        requirements_body += f'  [ ] Create SPIR-V backend test case in llvm/test/CodeGen/SPIRV/hlsl-intrinsics/{intrinsic_name}.ll'
+        doc_body = '## SPIR-V\n\n' + spirv_doc
+        labels.append('backend:SPIR-V')
+    
     test_case_body = gen_test_case_body(intrinsic_name, hlsl_intrinsics_test_cases)
-    body = f'{requirements_body}\n{dxil_doc_body}\n{test_case_body}\n{body}' 
+    body = f'{requirements_body}\n{doc_body}\n{test_case_body}\n{body}' 
     title = f"Implement the `{intrinsic_name}` HLSL Function"
     
     create_github_issue(title, body, labels)
     # waiting so github doesn't throttle us.
     time.sleep(5)
 
-def process_markdown_files(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases):
+def process_markdown_files(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases,
+                           hlsl_to_spirv_op, spirv_op_to_docs):
     rel_base_path = "win32/desktop-src/"
     doc_created_intrinsic = []
     for md_file in MD_FILES:
@@ -410,7 +425,9 @@ def process_markdown_files(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_ignore_intrins
                 body = content[1].strip() if len(content) > 1 else ''  # Rest as body
                 body = replace_md_links_with_hyperlinks(body, md_file_parent_dir)
                 doc_created_intrinsic.append(intrinsic_name)
-                create_github_issue_helper(intrinsic_name, body, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases)
+                create_github_issue_helper(intrinsic_name, body, hlsl_to_dxil_op, dxil_op_to_docs, 
+                                           hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases,
+                                           hlsl_to_spirv_op, spirv_op_to_docs)
 
     emptyBody = ''           
     for hl_op in db_hlsl.intrinsics:
@@ -488,6 +505,8 @@ if __name__ == "__main__":
     deprecated_intrinsics = gen_deprecated_intrinsics()
     hlsl_to_dxil_op = load_dict("hlsl_intrinsics.pkl", run_dxc)
     hlsl_intrinsics_test_cases = load_dict("hlsl_intrinsics_tests.pkl", load_test_cases)
+    hlsl_to_spirv_op = load_dict("hlsl_spirv_intrinsics.pkl", gen_spirv_shader_instr)
+    spirv_op_to_docs = load_dict("hlsl_spirv_docs.pkl", parse_spirv_spec)
     hlsl_completed_intrinsics = llvm_hlsl_completed_intrinsics()
     dxil_completed_ops = llvm_dxil_completed_ops()
     dxil_op_to_docs = query_dxil()
@@ -495,4 +514,4 @@ if __name__ == "__main__":
     hlsl_ignore_intrinsics.extend(deprecated_intrinsics)
     hlsl_ignore_intrinsics.extend(hlsl_completed_intrinsics)
     hlsl_ignore_intrinsics.extend(successfully_created_intrinsics)
-    process_markdown_files(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases)
+    process_markdown_files(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases, hlsl_to_spirv_op, spirv_op_to_docs)
