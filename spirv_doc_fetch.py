@@ -238,6 +238,39 @@ def parse_spirv_vulkan3_spec():
 
 def parse_spirv_vulkan_man_page(url):
     html = fetch_html(url)
+    soup = parse_html(html)
+    loading_div = soup.find('div', id='loading_msg')
+    if loading_div:
+        loading_div.decompose()
+
+    footer_div = soup.find('div', id='footer')
+    # Remove the div element if it exists
+    if footer_div:
+        footer_div.decompose()
+
+    sect1_divs = soup.find_all('div', class_='sect1')
+    for div in sect1_divs:    
+        h2_1 = div.find('h2', id='_see_also')
+        h2_2 = div.find('h2', id='_document_notes')
+        h2_3 = div.find('h2', id='_copyright')
+        if h2_1 or h2_2 or h2_3:
+            div.decompose()
+    
+    header_div = soup.find('div', id='header')
+    if header_div:
+        h1_tag = header_div.find('h1')
+        if h1_tag:
+            h1_text = h1_tag.get_text().replace('(3) Manual Page', '').strip()
+            a_tag = soup.new_tag('a', href=url)
+            a_tag.string = h1_text
+            h1_tag.clear()
+            h1_tag.append(a_tag)
+
+        h2_tag = header_div.find('h2', id='_name')
+        if h2_tag:
+            h2_tag.string = 'Short Description'
+
+    html = soup.prettify()
     markdown = convert_html_to_markdown(html)
     markdown =  replace_href_with_hyperlinks(markdown, spirv_vulkan3_base_url)
     return markdown
@@ -245,15 +278,15 @@ def parse_spirv_vulkan_man_page(url):
 
 def parse_spirv_spec():
     spirv_doc = parse_spirv_uni_spec()
-    spirv_glsl_doc = parse_spirv_glsl_spec()
-    spirv_doc.update(spirv_glsl_doc)
+    spirv_doc.update(parse_spirv_glsl_spec())
+    spirv_doc.update(parse_spirv_vulkan3_spec())
     return spirv_doc
 
 def main():
-    #id_to_markdown = parse_spirv_vulkan3_spec()
+    #id_to_markdown = parse_spirv_spec()
     #for table_id, markdown in id_to_markdown.items():
     #    print(markdown)
-    print(parse_spirv_vulkan_man_page('https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/vkSetEvent.html'))
+    print(parse_spirv_vulkan_man_page('https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/AHardwareBuffer.html'))
 
 if __name__ == "__main__":
     main()

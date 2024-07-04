@@ -10,6 +10,8 @@ from llvm_git_graph import llvm_hlsl_completed_intrinsics, llvm_dxil_completed_o
 from spirv_doc_fetch import parse_spirv_spec, spirv_vulkan3_base_url, parse_spirv_vulkan_man_page
 from utils import ApiKeys
 import time
+import traceback
+
 
 # GitHub repository and personal access token
 REPO_OWNER = 'farzonl'
@@ -284,7 +286,7 @@ successfully_created_intrinsics = [
 "sign",
 "smoothstep",
 "step",
-"WaveGetLaneCount",
+#"WaveGetLaneCount",
 "WaveIsFirstLane",
 "WaveActiveAnyTrue",
 "WaveActiveAllTrue",
@@ -327,45 +329,45 @@ successfully_created_intrinsics = [
 #"WorldToObject3x4",
 #"ObjectToWorld4x3",
 #"WorldToObject4x3",
-#'asfloat16',
-#'asint16',
-#'asuint16',
-#'GetAttributeAtVertex',
-#'InterlockedCompareStoreFloatBitwise',
-#'InterlockedCompareExchangeFloatBitwise',
-#'CheckAccessFullyMapped',
-#'AddUint64',
-#'NonUniformResourceIndex',
-#'WaveMatch',
-#'WaveMultiPrefixBitAnd',
-#'WaveMultiPrefixBitOr',
-#'WaveMultiPrefixBitXor',
-#'WaveMultiPrefixCountBits',
-#'WaveMultiPrefixProduct',
-#'WaveMultiPrefixSum',
-#'QuadAny',
-#'QuadAll',
-#'InstanceID',
+'asfloat16',
+'asint16',
+'asuint16',
+'GetAttributeAtVertex',
+'InterlockedCompareStoreFloatBitwise',
+'InterlockedCompareExchangeFloatBitwise',
+'CheckAccessFullyMapped',
+'AddUint64',
+'NonUniformResourceIndex',
+'WaveMatch',
+'WaveMultiPrefixBitAnd',
+'WaveMultiPrefixBitOr',
+'WaveMultiPrefixBitXor',
+'WaveMultiPrefixCountBits',
+'WaveMultiPrefixProduct',
+'WaveMultiPrefixSum',
+'QuadAny',
+'QuadAll',
+'InstanceID',
 #'GeometryIndex',
-#'ObjectToWorld',
-#'WorldToObject',
-#'dot4add_u8packed',
-#'dot4add_i8packed',
-#'dot2add',
-#'unpack_s8s16',
-#'unpack_u8u16',
-#'unpack_s8s32',
-#'unpack_u8u32',
-#'pack_s8',
-#'pack_u8',
-#'pack_clamp_s8',
-#'pack_clamp_u8',
-#'SetMeshOutputCounts',
-#'DispatchMesh',
-#'IsHelperLane',
-#'select',
-#'Barrier',
-#'GetRemainingRecursionLevels'
+'ObjectToWorld',
+'WorldToObject',
+'dot4add_u8packed',
+'dot4add_i8packed',
+'dot2add',
+'unpack_s8s16',
+'unpack_u8u16',
+'unpack_s8s32',
+'unpack_u8u32',
+'pack_s8',
+'pack_u8',
+'pack_clamp_s8',
+'pack_clamp_u8',
+'SetMeshOutputCounts',
+'DispatchMesh',
+'IsHelperLane',
+'select',
+'Barrier',
+'GetRemainingRecursionLevels'
 ]
 
 MD_PATH_PREFIX = 'https://github.com/MicrosoftDocs/win32/blob/docs/desktop-src/'
@@ -621,13 +623,14 @@ if __name__ == "__main__":
     hlsl_ignore_intrinsics.extend(successfully_created_intrinsics)
 
     succesfully_created_issues = load_dict("issue_numbers.pkl")
-    hlsl_ignore_intrinsics.extend(list(succesfully_created_issues.keys()))
+    #hlsl_ignore_intrinsics.extend(list(succesfully_created_issues.keys()))
     
     spirv_op_to_docs['NonSemantic.DebugPrintf'] = 'See "Using Debug Printf in HLSL Shaders" in https://vulkan.lunarg.com/doc/sdk/1.3.283.0/windows/debug_printf.html'
     
     try:
         process_markdown_files(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_ignore_intrinsics, hlsl_intrinsics_test_cases, hlsl_to_spirv_op, spirv_op_to_docs)
     except KeyError as e:
+        print(traceback.format_exc())
         print(f"KeyError: {e}")
         save_issue_numbers(succesfully_created_issues)
     except IndexError as e:
