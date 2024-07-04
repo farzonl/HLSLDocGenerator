@@ -76,6 +76,26 @@ const_intrinsitcs = ['Barrier']
 
 raygeneration_intrinsics = ['TraceRay']
 
+no_vulkan_equivalent = ['GetRenderTargetSampleCount', 'GetRenderTargetSamplePosition']
+spirv_unimplemented = [ 'AddUint64', 'WaveMultiPrefixCountBits', 'EvaluateAttributeAtSample',
+                       'EvaluateAttributeCentroid', 'EvaluateAttributeSnapped', 
+                       'InterlockedCompareStoreFloatBitwise', 'InterlockedCompareExchangeFloatBitwise',
+                       'QuadAny', 'QuadAll', 'ObjectToWorld', 'WorldToObject', 'Barrier', 'GetRemainingRecursionLevels']
+
+spirv_broken = ['asdouble', 'asuint', 'and', 'or']
+
+vulkan_pixel_shader = ['WaveGetLaneCount', 'WaveGetLaneIndex', 'InstanceIndex', 'PrimitiveIndex']
+
+intersection_intrinsics = ['ObjectToWorld3x4', 'WorldToObject3x4', 'ObjectToWorld4x3', 'WorldToObject4x3', 'InstanceID',
+                           'WorldRayDirection', 'WorldRayOrigin', 'ObjectRayOrigin', 'ObjectRayDirection',
+                           'RayTMin', 'RayTCurrent', 'HitKind', 'RayFlags', 'DispatchRaysIndex', 'DispatchRaysDimensions',
+                           'GeometryIndex'
+                          ]
+
+no_direct_x_support = ["printf"]
+no_spir_v_support = spirv_unimplemented + no_vulkan_equivalent + spirv_broken + hull_intrinsics
+special_spirv_example_code_intrinsics = vulkan_pixel_shader + amplification_intrinsics + mesh_intrinsics + any_hit_intrinsics + intersection_intrinsics
+
 intrinsic_to_spirv_map = { 'printf' : r'NonSemantic\.DebugPrintf', 'D3DCOLORtoUBYTE4': 'OpConvertFToS',
                            'AllMemoryBarrier': 'OpMemoryBarrier', 'countbits': 'OpBitCount',
                            'AllMemoryBarrierWithGroupSync': 'OpControlBarrier', 'fmod': 'OpFRem',
@@ -110,7 +130,14 @@ intrinsic_to_spirv_map = { 'printf' : r'NonSemantic\.DebugPrintf', 'D3DCOLORtoUB
                            'WorldToObject4x3' : 'WorldToObjectKHR', 'WorldToObject3x4' : 'WorldToObjectKHR', 'RayFlags' : 'IncomingRayFlagsKHR',
                            'ObjectToWorld4x3' : 'ObjectToWorldKHR', 'ObjectToWorld3x4' : 'ObjectToWorldKHR', 'RayTCurrent' : 'RayTmaxKHR',
                            'DispatchRaysIndex' : 'LaunchIdKHR', 'DispatchRaysDimensions' : 'LaunchSizeKHR', 'InstanceID' : 'InstanceCustomIndexKHR',
-                           'GeometryIndex' : 'RayGeometryIndexKHR', 'DispatchMesh' : 'OpEmitMeshTasksEXT', 'SetMeshOutputCounts' : "OpSetMeshOutputsEXT"
+                           'GeometryIndex' : 'RayGeometryIndexKHR', 'DispatchMesh' : 'OpEmitMeshTasksEXT', 'SetMeshOutputCounts' : "OpSetMeshOutputsEXT",
+                           'RayTMin' : 'RayTminKHR', 'PrimitiveIndex' : 'PrimitiveId', 'CheckAccessFullyMapped' : 'OpImageSparseTexelsResident', 
+                           'GetAttributeAtVertex' : 'OpAccessChain', 'NonUniformResourceIndex' : 'OpCopyObject', 'IgnoreHit': 'OpIgnoreIntersectionKHR',
+                           'AcceptHitAndEndSearch' : 'OpTerminateRayKHR', 'InstanceIndex' : 'InstanceId', 'unpack_s8s16' : 'OpSConvert', 
+                           'unpack_s8s32' : 'OpSConvert', 'unpack_u8u16' : 'OpUConvert', 'unpack_u8u32' : 'OpUConvert', 'pack_u8' : 'OpBitcast',
+                           'pack_s8' : 'OpBitcast', 'asfloat' : 'OpCompositeConstruct', 'asfloat16' : 'OpLoad', 'asint16' : 'OpBitcast',
+                           'asint' : 'OpCompositeConstruct', 'asuint' : 'OpCompositeConstruct',  'asuint16' : 'OpBitcast', 'clip' : 'OpDemoteToHelperInvocation',
+                           'WaveGetLaneIndex' : 'SubgroupLocalInvocationId', 'WaveGetLaneCount' : 'SubgroupSize',
                          }
 
 intrinsic_to_dxil_map = {'TraceRay': 'traceRay',
@@ -223,11 +250,17 @@ def remove_trailing_num(s):
    return re.sub(pattern, '', s)
 
 def extract_spirv_opcode(hl_op_name, line):
-    match = re.search(r'OpExtInst\s+%\w+\s+%\w+\s+(?P<word_opcode>\w+)\s+%\w+', line)
-    if match:
-        return match.group('word_opcode')
-    
     base_case_hl_op_name = remove_trailing_num(hl_op_name)
+
+    if hl_op_name in intrinsic_to_spirv_map:
+        match = re.search(intrinsic_to_spirv_map[hl_op_name], line)
+        if match:
+            return match.group(0)
+    
+    if base_case_hl_op_name in intrinsic_to_spirv_map:
+        match = re.search(intrinsic_to_spirv_map[base_case_hl_op_name], line)
+        if match:
+            return match.group(0)
 
     match = re.search(op_prefix_and_khr(base_case_hl_op_name), line)
     if match:
@@ -245,17 +278,10 @@ def extract_spirv_opcode(hl_op_name, line):
     if match:
         return match.group(0)
 
-    if hl_op_name in intrinsic_to_spirv_map:
-        match = re.search(intrinsic_to_spirv_map[hl_op_name], line)
-        if match:
-            return match.group(0)
-    
-    if base_case_hl_op_name in intrinsic_to_spirv_map:
-        match = re.search(intrinsic_to_spirv_map[base_case_hl_op_name], line)
-        if match:
-            return match.group(0)
-    else:
-        return None
+    match = re.search(r'OpExtInst\s+%\w+\s+%\w+\s+(?P<word_opcode>\w+)\s+%\w+', line)
+    if match:
+        return match.group('word_opcode')
+    return None
 
 def get_valid_llvm_type(type_name: str, param_name: str = ''):
     if type_name == 'i32' or type_name == 'i8':
@@ -833,13 +859,15 @@ def dxc_intrinsic_run_helper(
         fail_list,
         type_index: TypeIndex = TypeIndex.FloatType,
         vec_length: VecLength = VecLength.Vec4):
-    scratchpad = os.path.join(scratchpad_path, hl_op_name + "_test.hlsl")
+    file_name = hl_op_name + "_test.hlsl"
+    scratchpad = os.path.join(scratchpad_path, file_name)
     dxc_command[1] = scratchpad
     if hl_op.name in hull_intrinsics:
         dxc_command[2] = "-T hs_6_8"
     else:
         dxc_command[2] = "-T lib_6_8"
-    payload = generate_scratch_file(
+    first_line = f'//dxc {file_name} {" ".join(dxc_command[2:])}\n\n'
+    payload = first_line + generate_scratch_file(
         hl_op.name, hl_op.params, type_index, vec_length)
     write_payload(scratchpad, payload)
     run_hlsl_test(dxc_command, hl_op_name, intrinsic_to_opcode, fail_list)
@@ -854,7 +882,8 @@ def dxc_intrinsic_spirv_run_helper(
         fail_list,
         type_index: TypeIndex = TypeIndex.FloatType,
         vec_length: VecLength = VecLength.Vec4):
-    scratchpad = os.path.join(scratchpad_path, hl_op_name + "_spirv_test.hlsl")
+    file_name = hl_op_name + f'{"_spirv" if hl_op.name in special_spirv_example_code_intrinsics else ""}_test.hlsl'
+    scratchpad = os.path.join(scratchpad_path, file_name)
     dxc_command[1] = scratchpad
     if hl_op.name in hull_intrinsics:
         dxc_command[2] = "-T hs_6_8"
@@ -864,7 +893,8 @@ def dxc_intrinsic_spirv_run_helper(
         dxc_command[3] = "-E fn"
     else:
         dxc_command[2] = "-T lib_6_8"
-    payload = generate_scratch_file(
+    first_line = f'//dxc {file_name} {" ".join(dxc_command[2:])}\n\n'
+    payload = first_line + generate_scratch_file(
         hl_op.name, hl_op.params, type_index, vec_length, is_spirv=True)
     write_payload(scratchpad, payload)
     run_hlsl_test(dxc_command, hl_op_name, intrinsic_to_opcode, fail_list, is_spirv=True)
@@ -2462,22 +2492,6 @@ def gen_texture_gather():
         print_cli(texture_gather_instr_to_opcode)
     return texture_gather_instr_to_opcode
 
-no_vulkan_equivalent = ['GetRenderTargetSampleCount', 'GetRenderTargetSamplePosition']
-spirv_unimplemented = [ 'AddUint64', 'WaveMultiPrefixCountBits', 'EvaluateAttributeAtSample',
-                       'EvaluateAttributeCentroid', 'EvaluateAttributeSnapped', 
-                       'InterlockedCompareStoreFloatBitwise', 'InterlockedCompareExchangeFloatBitwise',
-                       'QuadAny', 'QuadAll', 'ObjectToWorld', 'WorldToObject', 'Barrier', 'GetRemainingRecursionLevels']
-
-spirv_broken = ['asdouble', 'asuint', 'and', 'or']
-
-vulkan_pixel_shader = ['WaveGetLaneCount', 'WaveGetLaneIndex', 'InstanceIndex', 'PrimitiveIndex']
-
-intersection_intrinsics = ['ObjectToWorld3x4', 'WorldToObject3x4', 'ObjectToWorld4x3', 'WorldToObject4x3', 'InstanceID',
-                           'WorldRayDirection', 'WorldRayOrigin', 'ObjectRayOrigin', 'ObjectRayDirection',
-                           'RayTMin', 'RayTCurrent', 'HitKind', 'RayFlags', 'DispatchRaysIndex', 'DispatchRaysDimensions',
-                           'GeometryIndex'
-                          ]
-
 def gen_spirv_shader_instr():
     scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
     os.makedirs(scratchpad_path, exist_ok=True)
@@ -2489,6 +2503,7 @@ def gen_spirv_shader_instr():
         "-enable-16bit-types",
         "-spirv",
         "-fspv-target-env=universal1.5",
+        '-fcgl',
         "-O0"
     ]
     deprecated_intrinsics = gen_deprecated_intrinsics()
@@ -2507,6 +2522,10 @@ def gen_spirv_shader_instr():
             continue
         total_intrinsics = total_intrinsics + 1
         hl_op_name = get_unique_name(hl_op.name, name_count)
+        if hl_op.name == 'clip':
+            dxc_command[6] = '-fspv-target-env=vulkan1.3'
+        else:
+            dxc_command[6] = '-fspv-target-env=universal1.5'
         dxc_intrinsic_spirv_run_helper(
                 hl_op,
                 dxc_command,

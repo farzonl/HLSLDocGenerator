@@ -6,6 +6,8 @@ import re
 import copy
 from bs4 import BeautifulSoup
 
+spirv_vulkan3_base_url = 'https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/'
+
 def replace_rel_links_with_hyperlinks(markdown_content, url):
     # Define a regex pattern to match Markdown links
     pattern = r'\[([^\]]+)\]\(#([^\)]+)\)'
@@ -16,6 +18,21 @@ def replace_rel_links_with_hyperlinks(markdown_content, url):
         title = match.group(1)
         id = match.group(2) 
         return f'[{title}]({url}#{id})'
+    
+    # Perform the replacement
+    replaced_content = re.sub(pattern, replace_link, markdown_content)
+    return replaced_content
+
+def replace_href_with_hyperlinks(markdown_content, url):
+    # Define a regex pattern to match Markdown links
+    pattern = r'\[([^\]]+)\]\(([^\)]+)\)'
+
+
+    # Replace Markdown links with hyperlinks
+    def replace_link(match):
+        title = match.group(1)
+        id = match.group(2) 
+        return f'[{title}]({url}{id})'
     
     # Perform the replacement
     replaced_content = re.sub(pattern, replace_link, markdown_content)
@@ -205,6 +222,27 @@ def parse_spirv_glsl_spec():
     id_to_markdown = extract_glsl_tables(soup, url)
     return id_to_markdown
 
+def parse_spirv_vulkan3_spec():
+    id_to_markdown = {}
+    html = fetch_html(spirv_vulkan3_base_url)
+    soup = parse_html(html)
+    for tr in soup.find_all('tr'):
+        tds = tr.find_all('td')
+        if len(tds) > 1:
+            a_tag = tds[1].find('a')
+            if a_tag:
+                key = a_tag.text.strip().replace('.html', '')
+                url = spirv_vulkan3_base_url + a_tag['href']
+                id_to_markdown[key] = url
+    return id_to_markdown
+
+def parse_spirv_vulkan_man_page(url):
+    html = fetch_html(url)
+    markdown = convert_html_to_markdown(html)
+    markdown =  replace_href_with_hyperlinks(markdown, spirv_vulkan3_base_url)
+    return markdown
+
+
 def parse_spirv_spec():
     spirv_doc = parse_spirv_uni_spec()
     spirv_glsl_doc = parse_spirv_glsl_spec()
@@ -212,9 +250,10 @@ def parse_spirv_spec():
     return spirv_doc
 
 def main():
-    id_to_markdown = parse_spirv_spec()
-    for table_id, markdown in id_to_markdown.items():
-        print(markdown)
+    #id_to_markdown = parse_spirv_vulkan3_spec()
+    #for table_id, markdown in id_to_markdown.items():
+    #    print(markdown)
+    print(parse_spirv_vulkan_man_page('https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/vkSetEvent.html'))
 
 if __name__ == "__main__":
     main()
