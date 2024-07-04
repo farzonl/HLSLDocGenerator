@@ -25,9 +25,8 @@ def replace_rel_links_with_hyperlinks(markdown_content, url):
 
 def replace_href_with_hyperlinks(markdown_content, url):
     # Define a regex pattern to match Markdown links
-    pattern = r'\[([^\]]+)\]\(([^\)]+)\)'
-
-
+    pattern = r'\[([^\]]+)\]\((?!https?:\/\/|www\.|.*\.(com|org|net|edu|gov|mil|co|io|me|us|info|biz|tv|cc|ly|in|uk))([^\)]+)\)'
+    
     # Replace Markdown links with hyperlinks
     def replace_link(match):
         title = match.group(1)
@@ -283,10 +282,9 @@ def parse_spirv_spec():
     return spirv_doc
 
 def main():
-    #id_to_markdown = parse_spirv_spec()
-    #for table_id, markdown in id_to_markdown.items():
-    #    print(markdown)
-    print(parse_spirv_vulkan_man_page('https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/AHardwareBuffer.html'))
+    id_to_markdown = parse_spirv_spec()
+    for table_id, markdown in id_to_markdown.items():
+        print(markdown)
 
 if __name__ == "__main__":
     main()

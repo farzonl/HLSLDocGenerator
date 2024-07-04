@@ -623,7 +623,7 @@ if __name__ == "__main__":
     hlsl_ignore_intrinsics.extend(successfully_created_intrinsics)
 
     succesfully_created_issues = load_dict("issue_numbers.pkl")
-    #hlsl_ignore_intrinsics.extend(list(succesfully_created_issues.keys()))
+    hlsl_ignore_intrinsics.extend(list(succesfully_created_issues.keys()))
     
     spirv_op_to_docs['NonSemantic.DebugPrintf'] = 'See "Using Debug Printf in HLSL Shaders" in https://vulkan.lunarg.com/doc/sdk/1.3.283.0/windows/debug_printf.html'
     
