@@ -401,34 +401,77 @@ shader_functions = {
     "GetRemainingRecursionLevels": {"Description": "Returns how many levels of recursion remain.", "Minimum shader model": 6.8},
 }
 
+remarks_base = {
+    "NonUniformResourceIndex": "Use NonUniformResourceIndex to access resources in shaders where the access pattern is not uniform across all threads.",
+    "AddUint64": "AddUint64 allows performing addition operations on 64-bit unsigned integers in shaders for complex arithmetic tasks.\n`AddUint64` is useful for high-precision computations where 64-bit integers are required.",
+    "GetAttributeAtVertex": "GetAttributeAtVertex retrieves vertex attributes at specific vertices, useful for per-vertex operations in vertex shaders.",
+    "asfloat16": "asfloat16 converts 16-bit integer values to half-precision floating point values, optimizing storage and arithmetic in shaders.",
+    "asint16": "asint16 converts 16-bit integer values to signed integers, useful for unpacking data in shaders.",
+    "asuint16": "asuint16 converts 16-bit integer values to unsigned integers, useful for bit manipulation and packing in shaders.",
+    "dot4add_u8packed": "dot4add_u8packed computes a dot product with four 8-bit packed unsigned integer vectors, useful for SIMD optimizations.",
+    "dot4add_i8packed": "dot4add_i8packed computes a dot product with four 8-bit packed signed integer vectors, useful for SIMD optimizations.",
+    "dot2add": "dot2add computes a dot product with two vectors, enhancing performance for 2D vector operations in shaders.",
+    "WaveMultiPrefixCountBits": "WaveMultiPrefixCountBits counts the number of set bits across wavefront threads, facilitating advanced bit manipulation tasks.",
+    "WaveMultiPrefixProduct": "WaveMultiPrefixProduct computes the product of values across wavefront threads, useful for parallel reduction operations.",
+    "WaveMatch": "WaveMatch checks if all threads within a wavefront match a given predicate, enabling synchronized control flow in shaders.",
+    "WaveMultiPrefixBitAnd": "WaveMultiPrefixBitAnd computes the bitwise AND across wavefront threads, useful for parallel bit masking operations.",
+    "WaveMultiPrefixBitOr": "WaveMultiPrefixBitOr computes the bitwise OR across wavefront threads, useful for parallel bit aggregation operations.",
+    "WaveMultiPrefixBitXor": "WaveMultiPrefixBitXor computes the bitwise XOR across wavefront threads, useful for parallel bit manipulation tasks.",
+    "WaveMultiPrefixSum": "WaveMultiPrefixSum computes the sum of values across wavefront threads, enabling parallel reduction computations.",
+    "IsHelperLane": "IsHelperLane identifies whether the current thread is executing as a helper lane, useful for adaptive shading techniques.",
+    "QuadAny": "QuadAny evaluates whether any threads within a quad meet a condition, facilitating SIMD optimizations in pixel shaders.",
+    "QuadAll": "QuadAll evaluates whether all threads within a quad meet a condition, facilitating SIMD optimizations in pixel shaders.",
+    "unpack_s8s16": "unpack_s8s16 unpacks a signed 8-bit value into a signed 16-bit value, useful for data conversion in shaders.",
+    "unpack_u8u16": "unpack_u8u16 unpacks an unsigned 8-bit value into an unsigned 16-bit value, useful for data conversion in shaders.",
+    "unpack_s8s32": "unpack_s8s32 unpacks a signed 8-bit value into a signed 32-bit value, useful for data conversion in shaders.",
+    "unpack_u8u32": "unpack_u8u32 unpacks an unsigned 8-bit value into an unsigned 32-bit value, useful for data conversion in shaders.",
+    "pack_s8": "pack_s8 packs a signed 8-bit integer into a 32-bit integer, useful for compact storage of smaller integers in buffers.",
+    "pack_u8": "pack_u8 packs an unsigned 8-bit integer into a 32-bit integer, useful for compact storage of smaller integers in buffers.",
+    "pack_clamp_s8": "pack_clamp_s8 packs a clamped signed 8-bit integer into a 32-bit integer, useful for safe conversion and storage in buffers.",
+    "pack_clamp_u8": "pack_clamp_u8 packs a clamped unsigned 8-bit integer into a 32-bit integer, useful for safe conversion and storage in buffers.",
+    "SetMeshOutputCounts": "SetMeshOutputCounts configures the number of output vertices and primitives per mesh shader invocation, enabling dynamic mesh generation.",
+    "DispatchMesh": "DispatchMesh dispatches thread groups for mesh shaders, allowing flexible thread group generation based on runtime conditions.",
+    "AllocateRayQuery": "AllocateRayQuery allocates resources for ray tracing queries, facilitating interactive ray tracing applications.",
+    "CreateResourceFromHeap": "CreateResourceFromHeap creates a resource from a specified heap, enabling efficient resource management in GPU programming.",
+    "select": "select chooses between two values based on a condition, providing conditional assignment in shader computations.",
+    "Barrier": "Barrier synchronizes threads within a shader, ensuring data consistency and facilitating parallel computation.",
+    "GetRemainingRecursionLevels": "GetRemainingRecursionLevels retrieves the remaining levels of recursion in a shader program, useful for managing recursive algorithms."
+}
 
-
-remarks_base = {'NonUniformResourceIndex' : 'See [NonUniformResourceIndex semantics](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs#nonuniformresourceindex-semantics) and [**Resource Binding**](../direct3d12/resource-binding-in-hlsl.md).', 
-                'GetAttributeAtVertex': '''
-                    Attributes used with `GetAttributeAtVertex`
-                    should be placed in the attribute structure for [`vertices`](https://microsoft.github.io/DirectX-Specs/d3d/MeshShader#vertex-attributes),
-                    and marked with the `nointerpolation` modifier.
-                    In the case that there is a pixel shader input aligned with a mesh shader per-primitive output,
-                    and that attribute is not marked as nointerpolation, the driver will still force the attribute to nointerpolate
-                    in order to maintain functionality.\n
-                    Vertex order is determined by the order of the vertex [`indices`](https://microsoft.github.io/DirectX-Specs/d3d/MeshShader#vertex-indices) for the primitive.
-                    The first vertex is the one referenced by the first index in this vector.
-                    When the term *provoking vertex* is used in other feature descriptions,
-                    for the mesh shader pipeline, it means the first vertex.
-                    This order applies to the component order of `SV_Barycentrics`
-                    and the index passed to `GetAttributeAtVertex`.''',
-                'asfloat16' : 'See https://github.com/microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types',
-                'asint16'   : 'See https://github.com/microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types',
-                'asuint16'  : 'See https://github.com/microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types',
-                'AddUint64' : '`AddUint64` is useful for high-precision computations where 64-bit integers are required.',   
-                'WaveMultiPrefixCountBits' : 'See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)',
-                'WaveMultiPrefixProduct'   : 'See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)',
-                'WaveMatch'                : 'See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)',
-                'WaveMultiPrefixBitAnd'    : 'See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)',
-                'WaveMultiPrefixBitOr'     : 'See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)',
-                'WaveMultiPrefixBitXor'    : 'See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)',
-                'WaveMultiPrefixSum'       : 'See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)',
-                'IsHelperLane' :  'See [IsHelperLane](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_6#is-helper-lane)'
+see_also_base = {'NonUniformResourceIndex' : '**See [NonUniformResourceIndex semantics](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs#nonuniformresourceindex-semantics)**\n - [**Resource Binding**](../direct3d12/resource-binding-in-hlsl.md).', 
+                'AddUint64' : '',
+                'GetAttributeAtVertex': ' **See [GetAttributeAtVertex MeshShader Usage](https://microsoft.github.io/DirectX-Specs/d3d/MeshShader#:~:text=Attributes%20used%20with,have%20any%20effect.).**',
+                'asfloat16' : '**See [HLSL 16-Bit-Scalar-Types](https://github.com/microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types)**',
+                'asint16'   : '**See [HLSL 16-Bit-Scalar-Types](https://github.com/microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types)**',
+                'asuint16'  : '**See [HLSL 16-Bit-Scalar-Types](https://github.com/microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types)**',   
+                'dot4add_u8packed' : '**See [Unsigned Integer Dot-Product of 4 Elements and Accumulate](../direct3dhlsl/hlsl-shader-model-6-4-features-for-direct3d-12.md#unsigned-integer-dot-product-of-4-elements-and-accumulate)**',
+                'dot4add_i8packed' : '**See [Signed Integer Dot-Product of 4 Elements and Accumulate](../direct3dhlsl/hlsl-shader-model-6-4-features-for-direct3d-12.md#signed-integer-dot-product-of-4-elements-and-accumulate)**',
+                'dot2add' : '**See [Single Precision Floating Point 2-Element Dot-Product and Accumulate](../direct3dhlsl/hlsl-shader-model-6-4-features-for-direct3d-12.md#signed-integer-dot-product-of-4-elements-and-accumulate)**',
+                'WaveMultiPrefixCountBits' : '**See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)**',
+                'WaveMultiPrefixProduct'   : '**See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)**',
+                'WaveMatch'                : '**See [WaveMatch() function](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavematch-function)**',
+                'WaveMultiPrefixBitAnd'    : '**See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)**',
+                'WaveMultiPrefixBitOr'     : '**See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)**',
+                'WaveMultiPrefixBitXor'    : '**See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)**',
+                'WaveMultiPrefixSum'       : '**See [WaveMultiPrefix*() Functions](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5#wavemultiprefix-functions)**',
+                'IsHelperLane' :  '**See [IsHelperLane](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_6#is-helper-lane)**',
+                'QuadAny' : '**See [QuadAny](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_7_QuadAny_QuadAll#quadany)**',
+                'QuadAll' : '**See [QuadAll](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_7_QuadAny_QuadAll#quadall)**',
+                'unpack_s8s16' : '**See [Unpack Intrinsics](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Pack_Unpack_Intrinsics#unpack-intrinsics)**',
+                'unpack_u8u16' : '**See [Unpack Intrinsics](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Pack_Unpack_Intrinsics#unpack-intrinsics)**',
+                'unpack_s8s32' : '**See [Unpack Intrinsics](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Pack_Unpack_Intrinsics#unpack-intrinsics)**',
+                'unpack_u8u32' : '**See [Unpack Intrinsics](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Pack_Unpack_Intrinsics#unpack-intrinsics)**',
+                'pack_s8' : '**See [Pack Intrinsics](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Pack_Unpack_Intrinsics#pack-intrinsics)**',
+                'pack_u8' : '**See [Pack Intrinsics](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Pack_Unpack_Intrinsics#pack-intrinsics)**',
+                'pack_clamp_s8' : '**See [Pack Intrinsics](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Pack_Unpack_Intrinsics#pack-intrinsics)**',
+                'pack_clamp_u8' : '**See [Pack Intrinsics](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Pack_Unpack_Intrinsics#pack-intrinsics)**',
+                'SetMeshOutputCounts' : '**See [SetMeshOutputCounts](https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#setmeshoutputcounts)**',
+                'DispatchMesh' : '**See [DispatchMesh - intrinsic](https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-intrinsic)**',
+                'AllocateRayQuery' : '',
+                'CreateResourceFromHeap' : '',
+                'select' : '',
+                'Barrier' : '**See [Work Graphs Barrier Types](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs.html#barrier)**',
+                'GetRemainingRecursionLevels' : '**See [GetRemainingRecursionLevels](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs.html#getremainingrecursionlevels)**'
                 }
 
 component_type_doc_dict = {'float_like<>' : '[**float**](/windows/desktop/WinProg/windows-data-types) or [**double**](/windows/desktop/WinProg/windows-data-types)',
@@ -500,16 +543,19 @@ def gen_syntax(hl_op_name, params):
     return ret_str
 
 
-def gen_params(params):
-    ret_params = f'## Parameters\n\n{"This function has no parameters.\n\n" if len(params) == 0 else ""}'
-    for name, (type_str, description) in params.items():
-        ret_params +=f'''<dl> <dt>\n\n
-        *{name}* : {type_str} \n</dt><dd>\n\n
-        {description}</dd></dl>\n\n'''
+def gen_params(hl_func):
+    table_str =  '| Item | Description |\n'
+    table_str += '|------|-------------|\n'
+    ret_params = f'## Parameters\n\n{"This function has no parameters.\n\n" if len(params)-1 == 0 else table_str}'
+    for param in hl_func["parameter_descriptions"]:
+        name = param['name']
+        description = param['description']
+        ret_params +=f'| *{name}* | [in] {description}  |'
     return ret_params
 
-def gen_return(description):
-    return f'## Return value\n\n {description}'
+def gen_return(hl_func):
+    ret  = hl_func["return_description"]
+    return f'## Return value\n\n {ret}'
 
 def gen_type_description(params):
     ret_str = '## Type Description\n\n'
@@ -520,8 +566,19 @@ def gen_type_description(params):
         ret_str += f'| *{name}*   | {type_order_dict.get(type_str, type_str)} | {component_type_doc_dict.get(type_str, type_str)} | {size_dict.get(type_str, type_str)} |\n'
     return ret_str
 
-def gen_remarks(long_desc):
-    return f'## Remarks\n\n{long_desc}'
+def gen_remarks(hl_op_name):
+    ret_str = '## Remarks\n\n'
+    remarks_specific = remarks_base[hl_op_name]
+    ret_str += f'{remarks_specific}\n'
+    return ret_str
+
+def gen_see_also(hl_op_name):
+    ret_str = '## See also\n\n'
+    ret_str += '\n- [**Intrinsic Functions (DirectX HLSL)**](dx-graphics-hlsl-intrinsic-functions.md)'
+    see_also_specific = see_also_base[hl_op_name]
+    if see_also_specific != '':
+        ret_str += f'\n- {see_also_specific}'
+    return ret_str
 
 
 def gen_min_shader_model(hl_op_name, hlsl_to_dxil_op, dxil_op_to_docs):
@@ -549,6 +606,16 @@ def gen_shader_stages(hl_op_name, hlsl_to_dxil_op, dxil_op_to_docs):
                 ret_str += f'* {name}\n'                         
     return ret_str
 
+
+
+def write_docs(file_name : str, md_content: str):
+    gen_docs_path = os.path.join(pathlib.Path().resolve(), 'gen_docs')
+    os.makedirs(gen_docs_path, exist_ok=True)
+    file_path = os.path.join(gen_docs_path, file_name + '.md')
+    with open(file_path, 'w') as file:
+        file.write(md_content)
+
+
 if __name__ == "__main__":
     keys = ApiKeys.parse_api_keys()
     OPENAI_API_KEY = keys.open_ai_key
@@ -556,13 +623,17 @@ if __name__ == "__main__":
     dxil_op_to_docs = query_dxil()
 
     hl_func_params = get_intrinsic_param_types(undocumented_apis)
-    #md_file = gen_header(hl_func_name)
-    #md_file += gen_syntax(hl_func_name, params)
-    #md_file += gen_type_description(params) + '\n'
-    #md_file += gen_min_shader_model(hl_func_name, hlsl_to_dxil_op, dxil_op_to_docs) + '\n'
-    #md_file += gen_shader_stages(hl_func_name, hlsl_to_dxil_op, dxil_op_to_docs) + '\n'
-    #print(md_file)
     for hl_func_name, params in hl_func_params.items():
         print(hl_func_name)
-        documentation = document_hlsl_intrinsic(hl_func_name, params)
-        print(documentation)
+        hl_func_documentation = document_hlsl_intrinsic(hl_func_name, params)
+
+        md_file = gen_header(hl_func_name)
+        md_file += gen_syntax(hl_func_name, params)
+        md_file += gen_params(hl_func_documentation) + '\n'
+        md_file += gen_return(hl_func_documentation) + '\n'
+        md_file += gen_type_description(params) + '\n'
+        md_file += gen_min_shader_model(hl_func_name, hlsl_to_dxil_op, dxil_op_to_docs) + '\n'
+        md_file += gen_shader_stages(hl_func_name, hlsl_to_dxil_op, dxil_op_to_docs) + '\n'
+        md_file += gen_remarks(hl_func_name)
+        md_file += gen_see_also(hl_func_name)
+        write_docs(hl_func_name, md_file)
