@@ -545,9 +545,10 @@ def gen_syntax(hl_op_name, params):
 
 def gen_params(hl_func):
     table_str =  '| Item | Description |\n'
+    params = hl_func.get("parameter_descriptions",[])
     table_str += '|------|-------------|\n'
-    ret_params = f'## Parameters\n\n{"This function has no parameters.\n\n" if len(params)-1 == 0 else table_str}'
-    for param in hl_func["parameter_descriptions"]:
+    ret_params = f'## Parameters\n\n{"This function has no parameters.\n\n" if len(params) == 0 else table_str}'
+    for param in params:
         name = param['name']
         description = param['description']
         ret_params +=f'| *{name}* | [in] {description}  |'
