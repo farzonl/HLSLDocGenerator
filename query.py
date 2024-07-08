@@ -5,10 +5,12 @@ import os
 import sys
 import subprocess
 import pathlib
+import pickle
 import re
 from cli import parser
 import shutil
 import csv
+from typing import List
 
 # pylint: disable=wrong-import-position
 sys.path.append(os.path.join(os.getcwd(), "DirectXShaderCompiler/utils/hct"))
@@ -1007,8 +1009,7 @@ def get_all_intrinsic_types():
             print(f"\t{param.name} : {param.type_name}")
 
 
-def get_specifc_intrinsic_types(func_name: str):
-    type_set = set()
+def get_specifc_intrinsic_types(func_name: str):  
     for hl_op in db_hlsl.intrinsics:
         if (func_name != hl_op.name):
             continue
@@ -1016,6 +1017,18 @@ def get_specifc_intrinsic_types(func_name: str):
         for param in hl_op.params:
             print(f"\t{param.name} : {param.type_name}")
 
+def get_intrinsic_param_types(func_names: list[str]):
+    func_params = {}
+    for hl_op in db_hlsl.intrinsics:
+        if (hl_op.name in func_names):
+            params = {}
+            for param in hl_op.params:
+                if param.name == hl_op.name:
+                    params["ret"] = param.type_name
+                else:
+                    params[param.name] = param.type_name
+            func_params[hl_op.name] = params
+    return func_params
 
 def dxc_shader_model_helper(dxc_sm):
     if dxc_sm == "":
@@ -2541,7 +2554,27 @@ def gen_spirv_shader_instr():
     #print(intrinsic_to_opcode)
     return intrinsic_to_opcode
 
+# Function to serialize the dictionary
+def serialize_dict(dictionary, file_path):
+    with open(file_path, 'wb') as file:
+        pickle.dump(dictionary, file)
 
+# Function to deserialize the dictionary
+def deserialize_dict(file_path):
+    with open(file_path, 'rb') as file:
+        return pickle.load(file)
+
+def load_dict(file_name, runner=lambda: {}):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    os.makedirs(scratchpad_path, exist_ok=True)
+    file_path = os.path.join(scratchpad_path, file_name)
+    ret_dict = {}
+    if os.path.exists(file_path):
+        ret_dict = deserialize_dict(file_path)
+    else:
+        ret_dict = runner()
+        serialize_dict(ret_dict, file_path)
+    return ret_dict
 
 def main():
     """ Main function used for setting up the cli"""

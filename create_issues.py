@@ -2,10 +2,9 @@ import os
 import requests
 import socket
 import pathlib
-import pickle
 import re
 from urllib3.exceptions import MaxRetryError, NameResolutionError
-from query import run_dxc, db_hlsl, gen_deprecated_intrinsics, hidden_intrinsics, query_dxil, gen_spirv_shader_instr, no_direct_x_support, no_spir_v_support, special_spirv_example_code_intrinsics
+from query import load_dict, run_dxc, db_hlsl, gen_deprecated_intrinsics, hidden_intrinsics, query_dxil, gen_spirv_shader_instr, no_direct_x_support, no_spir_v_support, special_spirv_example_code_intrinsics
 from llvm_git_graph import llvm_hlsl_completed_intrinsics, llvm_dxil_completed_ops
 from spirv_doc_fetch import parse_spirv_spec, spirv_vulkan3_base_url, parse_spirv_vulkan_man_page
 from utils import ApiKeys
@@ -526,28 +525,6 @@ def process_markdown_files(hlsl_to_dxil_op, dxil_op_to_docs, hlsl_ignore_intrins
     
     save_issue_numbers(succesfully_created_issues)
 
-
-# Function to serialize the dictionary
-def serialize_dict(dictionary, file_path):
-    with open(file_path, 'wb') as file:
-        pickle.dump(dictionary, file)
-
-# Function to deserialize the dictionary
-def deserialize_dict(file_path):
-    with open(file_path, 'rb') as file:
-        return pickle.load(file)
-
-def load_dict(file_name, runner=lambda: {}):
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
-    os.makedirs(scratchpad_path, exist_ok=True)
-    file_path = os.path.join(scratchpad_path, file_name)
-    ret_dict = {}
-    if os.path.exists(file_path):
-        ret_dict = deserialize_dict(file_path)
-    else:
-        ret_dict = runner()
-        serialize_dict(ret_dict, file_path)
-    return ret_dict
 
 def load_test_cases(intrinsic_subset= [], prefix=''):
     test_cases = {}

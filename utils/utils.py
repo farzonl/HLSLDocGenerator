@@ -10,7 +10,8 @@ from typing import List
 @dataclass
 class ApiKeys:
     """A class to Track API Keys."""
-    def __init__(self, github_key):
+    def __init__(self, open_ai_key, github_key):
+        self.open_ai_key = open_ai_key
         self.github_key = github_key
 
     @staticmethod
@@ -19,10 +20,10 @@ class ApiKeys:
         keys = None
         try:
             api_keys_dict = read_from_json(api_key_path)
-            keys = ApiKeys(api_keys_dict["github_key"])
+            keys = ApiKeys(api_keys_dict.get("open_ai_key",''), api_keys_dict.get("github_key",''))
         except FileNotFoundError:
             print("api_keys.json not found. reading from env args instead")
-            keys = ApiKeys(os.getenv("github_key"))
+            keys = ApiKeys(os.getenv("open_ai_key"), os.getenv("github_key"))
         return keys
 
 def read_from_json(filename: str) -> ApiKeys:
