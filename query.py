@@ -996,8 +996,7 @@ def get_all_types():
     for hl_op in db_hlsl.intrinsics:
         for param in hl_op.params:
             type_set.add(param.type_name)
-    print(type_set)
-
+    return type_set
 
 def get_all_intrinsic_types():
     type_set = set()
@@ -2589,7 +2588,8 @@ def main():
         get_all_intrinsic_types()
         return 0
     if args.query_unique_types:
-        get_all_types()
+        type_set = get_all_types()
+        print(type_set)
         return 0
     if args.gen_intrinsic_tests:
         run_dxc()

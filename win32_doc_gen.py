@@ -1,11 +1,14 @@
 
 from datetime import datetime
-from query import run_dxc, query_dxil, get_intrinsic_param_types, load_dict
+from query import run_dxc, query_dxil, get_all_types, get_intrinsic_param_types, load_dict
 from utils import ApiKeys
 from openai import OpenAI
 import json
 import os
+import re
 import pathlib
+from typing import Tuple, List
+
 
 undocumented_apis = [
     "NonUniformResourceIndex",
@@ -46,61 +49,115 @@ undocumented_apis = [
     "GetRemainingRecursionLevels",
 ]
 
-component_type_dict = {'float_like<>' : 'float or double',
-                       'float16_t<>'  : 'half',
-                       'numeric<>' : 'float or int',
-                       'numeric16_only<>' : 'half, int16_t, or uint16_t',
-                       'float' : 'float',
-                       'float16_t<2>' : 'half',
-                       'int' : 'int',
-                       'int<4>' : 'int',
-                       'uint' : 'uint',
-                       'uint<4>' : 'uint',
-                       'uint<c>' : 'uint',
-                       'int16_t<4>' : 'int16_t',
-                       'int16_t<>' : 'int16_t',
-                       'uint16_t<>' : 'uint16_t',
-                       'uint16_t<4>' : 'uint16_t',
-                       'any_int16or32<4>' : 'int, int16_t, uint, or uint16_t',
-                       'sint16or32_only<4>' : 'int or int16_t',
-                       'any<>' : 'bool, float, or int',
-                       'any_int<>' : 'int or uint',
-                       'any_sampler' : 'float, int, or uint',
-                       'bool' : 'bool',
-                       'p32i8' : 'int8_t4_packed',
-                       'p32u8' : 'uint8_t4_packed',
-                       'void' : 'void',
-                       'udt' : 'RayPayload',
-                       'resource' : 'resource'
-                      }
+def format_types_arr_list(types_arr):
+    if not types_arr:
+        return ''
+    if len(types_arr) == 1:
+        return types_arr[0]
+    if len(types_arr) == 2:
+        return f'{types_arr[0]} or {types_arr[1]}' 
+    return ', '.join(types_arr[:-1]) + ', or ' + types_arr[-1]
 
-template_type_dict = {'float_like<>' : 'scalar, vector, or matrix',
-                   'float16_t<>' :  'scalar, vector, or matrix',
-                   'numeric<>'  :   'scalar, vector, or matrix',
-                   'numeric16_only<>' : 'scalar, vector, or matrix',
-                   'float' : 'scalar',
-                   'float16_t<2>' : 'vector size 2',
-                   'int'  : 'scalar',
-                   'int<4>' : 'vector',
-                   'uint'  : 'scalar',
-                   'uint<4>' : 'vector size 4',
-                   'uint<c>' : 'vector',
-                   'int16_t<4>' : 'vector size 4',
-                   'int16_t<>' : 'scalar, vector, or matrix',
-                   'uint16_t<>' : 'scalar, vector, or matrix',
-                   'uint16_t<4>' : 'vector size 4',
-                   'any_int16or32<4>' : 'vector size 4',
-                   'sint16or32_only<4>' : 'vector size 4',
-                   'any<>' : 'scalar, vector, or matrix',
-                   'any_int<>' : 'scalar, vector, or matrix',
-                   'any_sampler' : 'scalar, vector, or matrix',
-                   'bool' : 'scalar',
-                   'p32i8' : '4 byte packed scalar',
-                   'p32u8' : '4 byte packed scalar',
-                   'void' : 'void',
-                   'udt' : "RayPayload Struct",
-                   'resource' : 'resource'
-                  }
+def remove_suffix(string):
+    # Define a regex pattern to match the suffixes
+    pattern = r'<[^>]+>$'  # Matches "<...>" at the end of the string
+    
+    # Use re.sub to remove the suffix from the string
+    result = re.sub(pattern, '', string)
+    
+    return result
+
+def format_types_as_md_str(types_arr: List[str]):
+    md_type_list = []
+    for elem_type in types_arr:
+        elem_name = remove_suffix(elem_type)
+        if (elem_type.startswith('half') or elem_type.startswith('int16_t')
+            or elem_type.startswith('uint16_t')):
+            md_type_list.append(f'[**{elem_name}**](https://github.com/microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types)')
+        elif (elem_type.startswith('int') or elem_type.startswith('uint')
+            or elem_type.startswith('float') or elem_type.startswith('double')):
+            md_type_list.append(f'[**{elem_name}**](../WinProg/windows-data-types)')
+        else:
+            md_type_list.append(f'**{elem_name}**')
+    return format_types_arr_list(md_type_list)
+
+def get_component_type(key) -> List[str]:
+    if key == 'float_like<>':
+        return ['float', 'double']
+    if key.startswith('float16_t'):
+        return ['half']
+    if key == 'numeric<>':
+        return ['float', 'int']
+    if key.startswith('int') and '_t' not in key: 
+        return ['int']
+    if key == 'numeric16_only<>':
+        return ['half', 'int16_t', 'uint16_t']
+    if key == 'any_int16or32<4>':
+        return ['int', 'int16_t', 'uint', 'uint16_t']
+    if key == 'sint16or32_only<4>':
+        return ['int', 'int16_t']
+    elif key.startswith('float'):
+        return ['float']
+    if key.startswith('uint') and '_t' not in key: 
+        return ['uint']
+    if key.startswith('int16_t'):
+        return ['int16_t']
+    if key.startswith('uint16_t'):
+        return ['uint16_t']
+    if key == 'any<>':
+        return ['bool', 'float', 'int']
+    if key == 'any_sampler':
+        return ['float', 'int', 'uint']
+    if key == 'any_int<>':
+         return ['int', 'int16_t', 'int64_t', 'uint', 'uint16_t', 'uint64_t']
+    if key.startswith('bool'):
+        return ['bool']
+    if key == 'p32i8':
+        return ['int8_t4_packed']
+    if key == 'p32u8':
+        return ['uint8_t4_packed']
+    if key == 'void':
+        return ['void']
+    if key == 'udt':
+        return ['RayPayload']
+    if key == 'resource':
+        return ['resource']
+    else:
+        return []
+
+type_order_dict = {}
+size_dict = {}
+template_type_dict = {}
+
+def parse_size_and_type(s: str)-> Tuple[str, str, str]:
+    if s.endswith('<>'):
+        return ('any', 
+                '[**scalar**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-scalar.md), **vector**, or **matrix**',
+                 'scalar, vector, or matrix')
+    if s.endswith('<c>'):
+        return ('any', '**vector**', 'vector size any')
+    match = re.search(r'<(\d+)>$', s)
+    if match:
+        return (match.group(1),  '**vector**', f'vector size {match.group(1)}')
+    if s =='p32i8' or s == 'p32u8':
+        return ('1', '[**scalar**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-scalar.md)', '4 byte packed scalar')
+    if s == 'void':
+        return ('0','**void**', 'void')
+    if s == 'udt':
+        return ('1', '[**RayPayload**](../direct3d12/ray-payload.md) [**Struct**](../direct3dhlsl/dx-graphics-hlsl-struct.md)', 'RayPayload Struct')
+    if s == 'resource':
+        return ('1', '[**Resource Types](../direct3d12/resource-binding-in-hlsl.md)', 'resource')
+    return ('1', '[**scalar**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-functions.md)', 'scalar')
+
+
+def gen_type_and_size_dict():
+    global size_dict
+    global type_order_dict
+    type_set = get_all_types()
+    for param_type in type_set:
+        (size_dict[param_type], 
+         type_order_dict[param_type], 
+         template_type_dict[param_type ]) = parse_size_and_type(param_type)
 
 def load_cache(file_path):
     if os.path.exists(file_path):
@@ -121,7 +178,7 @@ def ask_openai_to_document_hlsl_intrinsic(intrinsic_name, params):
         {"role": "user", 
             "content": 
             f"Document the HLSL intrinsic function '{intrinsic_name}' which takes {len(params)-1 }" + 
-            f"parameters and a return template type of {template_type_dict[params['ret']]} and component type of {component_type_dict[params['ret']]}." 
+            f"parameters and a return template type of {template_type_dict[params['ret']]} and component type of {format_types_arr_list(get_component_type(params['ret']))}." 
             + "Provide descriptions for each parameter and the return type." +
             f" Use the parameter names {', '.join([param_name for param_name in params.keys() if param_name != 'ret'])}."
             }
@@ -474,27 +531,11 @@ see_also_base = {'NonUniformResourceIndex' : '**See [NonUniformResourceIndex sem
                 'GetRemainingRecursionLevels' : '**See [GetRemainingRecursionLevels](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs.html#getremainingrecursionlevels)**'
                 }
 
-component_type_doc_dict = {'float_like<>' : '[**float**](/windows/desktop/WinProg/windows-data-types) or [**double**](/windows/desktop/WinProg/windows-data-types)',
-                       'float16_t<>'  : '[**half**](https://github.com/microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types)',
-                       'numeric<>' : '[**float**](/windows/desktop/WinProg/windows-data-types), [**int**](/windows/desktop/WinProg/windows-data-types)',
-                       'uint' : '[**uint**](/windows/desktop/WinProg/windows-data-types)',
-                       'uint<4>' : '[**uint**](/windows/desktop/WinProg/windows-data-types)',
-                      }
-size_dict =  {'float_like<>' : 'any', 'float16_t<>' : 'any', 'numeric<>'  : 'any', 
-              'uint' : '1', 'uint<4>' : '4', }
-
-type_order_dict = {'float_like<>' : '[**scalar**](dx-graphics-hlsl-intrinsic-scalar.md), **vector**, or **matrix**',
-                   'float16_t<>' : '[**scalar**](dx-graphics-hlsl-intrinsic-scalar.md), **vector**, or **matrix**',
-                   'numeric<>'  : '[**scalar**](dx-graphics-hlsl-intrinsic-scalar.md), **vector**, or **matrix**',
-                   'uint'  : '[**scalar**](dx-graphics-hlsl-intrinsic-functions.md)',
-                   'uint<4>' : '**vector**',
-                  }
-
-shader_model_dict = {'6.0' : '[Shader Model 6](shader-model-6-0.md)', 
+shader_model_dict = {'6.0' : '[Shader Model 6](../direct3dhlsl/shader-model-6-0.md)', 
                      '6.1' : 'Shader Model 6.1', 
                      '6.2' : 'Shader Model 6.2', 
                      '6.3' : 'Shader Model 6.3', 
-                     '6.4' : '[Shader Model 6.4](hlsl-shader-model-6-4-features-for-direct3d-12.md)', 
+                     '6.4' : '[Shader Model 6.4](../direct3dhlsl/hlsl-shader-model-6-4-features-for-direct3d-12.md)', 
                      '6.5' : '[Shader Model 6.5](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5)', 
                      '6.6' : '[Shader Model 6.6](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_6)', 
                      '6.7' : '[Shader Model 6.7](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_7)',
@@ -514,8 +555,8 @@ shader_stage_dict = {
 'mesh'          : 'https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html',
 'miss'          : '../direct3d12/miss-shader.md',
 'raygeneration' : '../direct3d12/ray-generation-shader.md',
-'pixel'         : 'dx-graphics-hlsl-writing-shaders-9.md#pixel-shader-basics',
-'vertex'        : 'dx-graphics-hlsl-writing-shaders-9.md#vertex-shader-basics',
+'pixel'         : '../direct3dhlsl/dx-graphics-hlsl-writing-shaders-9.md#pixel-shader-basics',
+'vertex'        : '../direct3dhlsl/dx-graphics-hlsl-writing-shaders-9.md#vertex-shader-basics',
 }
 
 def gen_metadata(hl_op_name, short_description):
@@ -560,11 +601,11 @@ def gen_return(hl_func):
 
 def gen_type_description(params):
     ret_str = '## Type Description\n\n'
-    ret_str += '| Name  | [**Template Type**](dx-graphics-hlsl-intrinsic-functions.md)| [**Component Type**](dx-graphics-hlsl-intrinsic-functions.md) | Size |\n'
-    ret_str += '|-------|-------------------------------------------------------------|---------------------------------------------------------------|------|\n'
+    ret_str += '| Name  | [**Template Type**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-functions.md)| [**Component Type**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-functions.md) | Size |\n'
+    ret_str += '|-------|-----------------------------------------------------------------------------|-------------------------------------------------------------------------------|------|\n'
 
     for name, type_str in params.items():
-        ret_str += f'| *{name}*   | {type_order_dict.get(type_str, type_str)} | {component_type_doc_dict.get(type_str, type_str)} | {size_dict.get(type_str, type_str)} |\n'
+        ret_str += f'| *{name}*   | {type_order_dict.get(type_str, type_str)} | {format_types_as_md_str(get_component_type(type_str))} | {size_dict.get(type_str, type_str)} |\n'
     return ret_str
 
 def gen_remarks(hl_op_name):
@@ -575,7 +616,7 @@ def gen_remarks(hl_op_name):
 
 def gen_see_also(hl_op_name):
     ret_str = '## See also\n\n'
-    ret_str += '\n- [**Intrinsic Functions (DirectX HLSL)**](dx-graphics-hlsl-intrinsic-functions.md)'
+    ret_str += '\n- [**Intrinsic Functions (DirectX HLSL)**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-functions.md)'
     see_also_specific = see_also_base[hl_op_name]
     if see_also_specific != '':
         ret_str += f'\n- {see_also_specific}'
@@ -607,8 +648,6 @@ def gen_shader_stages(hl_op_name, hlsl_to_dxil_op, dxil_op_to_docs):
                 ret_str += f'* {name}\n'                         
     return ret_str
 
-
-
 def write_docs(file_name : str, md_content: str):
     gen_docs_path = os.path.join(pathlib.Path().resolve(), 'gen_docs')
     os.makedirs(gen_docs_path, exist_ok=True)
@@ -618,6 +657,7 @@ def write_docs(file_name : str, md_content: str):
 
 
 if __name__ == "__main__":
+    gen_type_and_size_dict()
     keys = ApiKeys.parse_api_keys()
     OPENAI_API_KEY = keys.open_ai_key
     hlsl_to_dxil_op = load_dict("hlsl_intrinsics.pkl", run_dxc)
