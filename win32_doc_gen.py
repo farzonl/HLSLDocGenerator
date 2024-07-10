@@ -47,6 +47,10 @@ undocumented_apis = [
     "select",
     "Barrier",
     "GetRemainingRecursionLevels",
+    "InterlockedCompareStoreFloatBitwise",
+    "InterlockedCompareExchangeFloatBitwise",
+    "ObjectToWorld",
+    "WorldToObject"
 ]
 
 def format_types_arr_list(types_arr):
@@ -131,23 +135,23 @@ template_type_dict = {}
 
 def parse_size_and_type(s: str)-> Tuple[str, str, str]:
     if s.endswith('<>'):
-        return ('any', 
-                '[**scalar**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-scalar.md), **vector**, or **matrix**',
+        return ('any',
+                '[**scalar**](../direct3dhlsl/dx-graphics-hlsl-scalar.md), [**vector**](../direct3dhlsl/dx-graphics-hlsl-vector.md), or [**matrix**](../direct3dhlsl/dx-graphics-hlsl-matrix.md)',
                  'scalar, vector, or matrix')
     if s.endswith('<c>'):
-        return ('any', '**vector**', 'vector size any')
+        return ('any', '[**vector**](../direct3dhlsl/dx-graphics-hlsl-vector.md)', 'vector size any')
     match = re.search(r'<(\d+)>$', s)
     if match:
-        return (match.group(1),  '**vector**', f'vector size {match.group(1)}')
+        return (match.group(1),  '[**vector**](../direct3dhlsl/dx-graphics-hlsl-vector.md)', f'vector size {match.group(1)}')
     if s =='p32i8' or s == 'p32u8':
-        return ('1', '[**scalar**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-scalar.md)', '4 byte packed scalar')
+        return ('1', '[**scalar**](../direct3dhlsl/dx-graphics-hlsl-scalar.md)', '4 byte packed scalar')
     if s == 'void':
         return ('0','**void**', 'void')
     if s == 'udt':
         return ('1', '[**RayPayload**](../direct3d12/ray-payload.md) [**Struct**](../direct3dhlsl/dx-graphics-hlsl-struct.md)', 'RayPayload Struct')
     if s == 'resource':
         return ('1', '[**Resource Types](../direct3d12/resource-binding-in-hlsl.md)', 'resource')
-    return ('1', '[**scalar**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-functions.md)', 'scalar')
+    return ('1', '[**scalar**](../direct3dhlsl/dx-graphics-hlsl-scalar.md)', 'scalar')
 
 
 def gen_type_and_size_dict():
@@ -601,8 +605,8 @@ def gen_return(hl_func):
 
 def gen_type_description(params):
     ret_str = '## Type Description\n\n'
-    ret_str += '| Name  | [**Template Type**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-functions.md)| [**Component Type**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-functions.md) | Size |\n'
-    ret_str += '|-------|-----------------------------------------------------------------------------|-------------------------------------------------------------------------------|------|\n'
+    ret_str += '| Name  | [**Template Type**](../direct3dhlsl/dx-graphics-hlsl-data-types.md)| [**Component Type**](../direct3dhlsl/dx-graphics-hlsl-data-types.md) | Size |\n'
+    ret_str += '|-------|--------------------------------------------------------------------|----------------------------------------------------------------------|------|\n'
 
     for name, type_str in params.items():
         ret_str += f'| *{name}*   | {type_order_dict.get(type_str, type_str)} | {format_types_as_md_str(get_component_type(type_str))} | {size_dict.get(type_str, type_str)} |\n'

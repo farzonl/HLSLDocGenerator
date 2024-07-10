@@ -146,7 +146,9 @@ intrinsic_to_dxil_map = {'TraceRay': 'traceRay',
                          'InterlockedExchange': 'atomicBinOp',
                          'InterlockedAnd': 'annotateHandle',
                          'CheckAccessFullyMapped': 'checkAccessFullyMapped',
-                         'InterlockedCompareStore': 'atomicCompareExchange'
+                         'InterlockedCompareStore': 'atomicCompareExchange',
+                         'InterlockedCompareStoreFloatBitwise' : 'atomicCompareExchange',
+                         'InterlockedCompareExchangeFloatBitwise' : 'atomicCompareExchange',
                          }
 
 # docs say these are numeric, but they are not
@@ -208,6 +210,8 @@ def md_table_to_dict(md_file):
     for row in table.find_all('tr')[1:]:
         cells = row.find_all('td')
         name = cells[name_index].get_text(strip=True)
+        name = name.replace("\n", " ")
+        print(name)
         description = cells[desc_index].get_text(strip=True)
         # shaders only went from 1-5 before DXC
         # after is 6.0-6.8
@@ -736,13 +740,20 @@ def printHLSLDoc():
     hlsl_intrinsic_doc_dict = md_table_to_dict(full_md_filepath)
     intrinsics_no_docs = []
     hlsl_intrinsics_count = 0
+    texture_list = ['tex1D', 'tex1D', 'tex2D', 'tex2D', 'tex3D', 'tex3D', 'texCUBE', 'texCUBE']
     for hl_op in db_hlsl.intrinsics:
-        if (hl_op.ns != "Intrinsics" or hl_op.name in hidden_intrinsics):
+        if (hl_op.ns != "Intrinsics") or hl_op.name == 'source_mark':
             continue
         hlsl_intrinsics_count = hlsl_intrinsics_count + 1
         if hl_op.name in hlsl_intrinsic_doc_dict:
             print(
                 f'{hl_op.name} args {len(hl_op.params)} docs: {hlsl_intrinsic_doc_dict[hl_op.name]}')
+        elif hl_op.name in texture_list:
+            hl_op_temp_name = f'{hl_op.name}(s, t)'
+            if len(hl_op.params) == 5:
+               hl_op_temp_name = f'{hl_op.name}(s, t, ddx, ddy)'
+            print(
+                f'{hl_op_temp_name} args {len(hl_op.params)} docs: {hlsl_intrinsic_doc_dict[hl_op_temp_name]}')
         else:
             intrinsics_no_docs.append(hl_op.name)
     print("no docs:")

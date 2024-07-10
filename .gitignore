@@ -3,6 +3,7 @@ spec/
 scratch/
 DXC_Debug_BUILD/
 DXC_COV_BUILD/
+gen_docs/
 .DS_Store
 */__pycache__
 
