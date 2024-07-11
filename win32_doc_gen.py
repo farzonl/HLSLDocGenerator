@@ -502,15 +502,15 @@ remarks_base = {
     "DispatchMesh": "DispatchMesh dispatches thread groups for mesh shaders, allowing flexible thread group generation based on runtime conditions.",
     "AllocateRayQuery": "AllocateRayQuery allocates resources for ray tracing queries, facilitating interactive ray tracing applications.",
     "CreateResourceFromHeap": "CreateResourceFromHeap creates a resource from a specified heap, enabling efficient resource management in GPU programming.",
-    "select": "In HLSL 2021  `int3 Z = select(X, 1, 0);` is a replacement for ```hlsl\nint3 X = {1, 1, 1};\nint3 Z = X ? 1 : 0;\n```",
+    "select": "In HLSL 2021 `int3 Z = select(X, 1, 0);` is a replacement for\n```hlsl\nint3 X = {1, 1, 1};\nint3 Z = X ? 1 : 0;\n```",
     "Barrier": "Barrier synchronizes threads within a shader, ensuring data consistency and facilitating parallel computation.",
     "GetRemainingRecursionLevels": "GetRemainingRecursionLevels retrieves the remaining levels of recursion in a shader program, useful for managing recursive algorithms.",
     "InterlockedCompareStoreFloatBitwise" : "The floating-point overrides of these functions  use the same operations by the existing integer functions. Therefore, these overrides are supported on SM 6.0 even without capability bits.",
     "InterlockedCompareExchangeFloatBitwise" : "The floating-point overrides of these functions  use the same operations by the existing integer functions. Therefore, these overrides are supported on SM 6.0 even without capability bits.",
     "WorldToObject" : "This is the inverse of the ObjectToWorld transformation",
     "ObjectToWorld" : "This is the inverse of the WorldToObject transformation",
-    "and" : "In HLSL 2021 `and(X, Y);` is a replacement for ```hlsl\nint3 X = {1, 1, 1};\nint3 Y = {0, 0, 0};\nbool3 Cond = X && Y;\n```",
-    "or"  : "In HLSL 2021 `or(X, Y);` is a replacement for ```hlsl\nint3 X = {1, 1, 1};\nint3 Y = {0, 0, 0};\nbool3 Cond = X || Y;\n```"
+    "and" : "In HLSL 2021 `and(X, Y);` is a replacement for\n```hlsl\nint3 X = {1, 1, 1};\nint3 Y = {0, 0, 0};\nbool3 Cond = X && Y;\n```",
+    "or"  : "In HLSL 2021 `or(X, Y);` is a replacement for\n```hlsl\nint3 X = {1, 1, 1};\nint3 Y = {0, 0, 0};\nbool3 Cond = X || Y;\n```"
 
 }
 
