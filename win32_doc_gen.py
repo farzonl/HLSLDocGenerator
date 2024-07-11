@@ -221,8 +221,12 @@ def ask_openai_to_document_hlsl_intrinsic(intrinsic_name, params):
    # Extract the function call
     function_call = response.choices[0].message.function_call
     # Parse the arguments as JSON
-    arguments = json.loads(function_call.arguments)
-
+    arguments = {}
+    if function_call != None and function_call.arguments != None:
+        arguments = json.loads(function_call.arguments)
+    else:
+        print(f"an error occured generating: {intrinsic_name} You will need to rerun.")
+        print(function_call) # an error occured
     return arguments
 
 def document_hlsl_intrinsic(intrinsic_name, params):
@@ -460,6 +464,10 @@ shader_functions = {
     "select": {"Description": "A conditional selection function that chooses between two values based on a condition.", "Minimum shader model": ""},
     "Barrier": {"Description": "Request a barrier for a set of memory types and/or thread group execution sync.", "Minimum shader model": 6.8},
     "GetRemainingRecursionLevels": {"Description": "Returns how many levels of recursion remain.", "Minimum shader model": 6.8},
+    "InterlockedCompareStoreFloatBitwise" :  {"Description": "Atomic compare and store for floats.", "Minimum shader model": 6.6},
+    "InterlockedCompareExchangeFloatBitwise": {"Description": "Atomic compare and exchange for floats.", "Minimum shader model": 6.6},
+    "ObjectToWorld" :  {"Description": "Converts object-space coordinates to world-space.", "Minimum shader model": 6.6},
+    "WorldToObject" :  {"Description": "Converts world-space coordinates to object-space.", "Minimum shader model": 6.6},
 }
 
 remarks_base = {
@@ -496,7 +504,12 @@ remarks_base = {
     "CreateResourceFromHeap": "CreateResourceFromHeap creates a resource from a specified heap, enabling efficient resource management in GPU programming.",
     "select": "select chooses between two values based on a condition, providing conditional assignment in shader computations.",
     "Barrier": "Barrier synchronizes threads within a shader, ensuring data consistency and facilitating parallel computation.",
-    "GetRemainingRecursionLevels": "GetRemainingRecursionLevels retrieves the remaining levels of recursion in a shader program, useful for managing recursive algorithms."
+    "GetRemainingRecursionLevels": "GetRemainingRecursionLevels retrieves the remaining levels of recursion in a shader program, useful for managing recursive algorithms.",
+    "InterlockedCompareStoreFloatBitwise" : "The floating-point overrides of these functions  use the same operations by the existing integer functions. Therefore, these overrides are supported on SM 6.0 even without capability bits.",
+    "InterlockedCompareExchangeFloatBitwise" : "The floating-point overrides of these functions  use the same operations by the existing integer functions. Therefore, these overrides are supported on SM 6.0 even without capability bits.",
+    "WorldToObject" : "This is the inverse of the ObjectToWorld transformation",
+    "ObjectToWorld" : "This is the inverse of the WorldToObject transformation",
+
 }
 
 see_also_base = {'NonUniformResourceIndex' : '**See [NonUniformResourceIndex semantics](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs#nonuniformresourceindex-semantics)**\n - [**Resource Binding**](../direct3d12/resource-binding-in-hlsl.md).', 
@@ -532,7 +545,11 @@ see_also_base = {'NonUniformResourceIndex' : '**See [NonUniformResourceIndex sem
                 'CreateResourceFromHeap' : '',
                 'select' : '',
                 'Barrier' : '**See [Work Graphs Barrier Types](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs.html#barrier)**',
-                'GetRemainingRecursionLevels' : '**See [GetRemainingRecursionLevels](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs.html#getremainingrecursionlevels)**'
+                'GetRemainingRecursionLevels' : '**See [GetRemainingRecursionLevels](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs.html#getremainingrecursionlevels)**',
+                'InterlockedCompareStoreFloatBitwise' : '** See [InterlockedCompareStoreFloatBitwise](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Int64_and_Float_Atomics.html#interlockedcomparestorefloatbitwise)**', 
+                'InterlockedCompareExchangeFloatBitwise' : '** See [InterlockedCompareStoreFloatBitwise](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Int64_and_Float_Atomics.html#interlockedcompareexchange)**', 
+                'ObjectToWorld' :  '**See [DXR Functional Spec](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html)**',
+                'WorldToObject' :  '**See [DXR Functional Spec](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html)**',
                 }
 
 shader_model_dict = {'6.0' : '[Shader Model 6](../direct3dhlsl/shader-model-6-0.md)', 
