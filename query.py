@@ -739,28 +739,29 @@ def generate_scratch_file(
 
 def printHLSLDoc():
     hlsl_intrinsic_doc_dict = md_table_to_dict(full_md_filepath)
-    #intrinsics_no_docs = []
-    #hlsl_intrinsics_count = 0
-    #texture_list = ['tex1D', 'tex1D', 'tex2D', 'tex2D', 'tex3D', 'tex3D', 'texCUBE', 'texCUBE']
-    #for hl_op in db_hlsl.intrinsics:
-    #    if (hl_op.ns != "Intrinsics") or hl_op.name == 'source_mark':
-    #        continue
-    #    hlsl_intrinsics_count = hlsl_intrinsics_count + 1
-    #    if hl_op.name in hlsl_intrinsic_doc_dict:
-    #        #print(
-    #            f'{hl_op.name} args {len(hl_op.params)} docs: {hlsl_intrinsic_doc_dict[hl_op.name]}')
-    #    elif hl_op.name in texture_list:
-    #        hl_op_temp_name = f'{hl_op.name}(s, t)'
-    #        if len(hl_op.params) == 5:
-    #           hl_op_temp_name = f'{hl_op.name}(s, t, ddx, ddy)'
-    #        print(
-    #            f'{hl_op_temp_name} args {len(hl_op.params)} docs: {hlsl_intrinsic_doc_dict[hl_op_temp_name]}')
-    #    else:
-    #        intrinsics_no_docs.append(hl_op.name)
-    #print("no docs:")
-    #print(intrinsics_no_docs)
-    #print(
-    #    f'percentage without docs: {100.0 * (len(intrinsics_no_docs)/ hlsl_intrinsics_count)}%')
+    intrinsics_no_docs = []
+    hlsl_intrinsics_count = 0
+    texture_list = ['tex1D', 'tex1D', 'tex2D', 'tex2D', 'tex3D', 'tex3D', 'texCUBE', 'texCUBE']
+    for hl_op in db_hlsl.intrinsics:
+        if (hl_op.ns != "Intrinsics" or hl_op.name in hidden_intrinsics
+            or hl_op.name == 'source_mark'):
+            continue
+        hlsl_intrinsics_count = hlsl_intrinsics_count + 1
+        if hl_op.name in hlsl_intrinsic_doc_dict:
+            print(
+                f'{hl_op.name} args {len(hl_op.params)} docs: {hlsl_intrinsic_doc_dict[hl_op.name]}')
+        elif hl_op.name in texture_list:
+            hl_op_temp_name = f'{hl_op.name}(s, t)'
+            if len(hl_op.params) == 5:
+               hl_op_temp_name = f'{hl_op.name}(s, t, ddx, ddy)'
+            print(
+                f'{hl_op_temp_name} args {len(hl_op.params)} docs: {hlsl_intrinsic_doc_dict[hl_op_temp_name]}')
+        else:
+            intrinsics_no_docs.append(hl_op.name)
+    print("no docs:")
+    print(intrinsics_no_docs)
+    print(
+        f'percentage without docs: {100.0 * (len(intrinsics_no_docs)/ hlsl_intrinsics_count)}%')
 
 
 def build_dxc(rebuild: bool = False, cov_build : bool = False):

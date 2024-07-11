@@ -40,8 +40,8 @@ undocumented_apis = [
     "pack_clamp_u8",
     "SetMeshOutputCounts",
     "DispatchMesh",
-    "AllocateRayQuery",
-    "CreateResourceFromHeap",
+    #"AllocateRayQuery",
+    #"CreateResourceFromHeap",
     "and",
     "or",
     "select",
@@ -617,7 +617,7 @@ def gen_params(hl_func):
     for param in params:
         name = param['name']
         description = param['description']
-        ret_params +=f'| *{name}* | [in] {description}  |'
+        ret_params +=f'| *{name}* | [in] {description}  |\n'
     return ret_params
 
 def gen_return(hl_func):
@@ -630,7 +630,7 @@ def gen_type_description(params):
     ret_str += '|-------|--------------------------------------------------------------------|----------------------------------------------------------------------|------|\n'
 
     for name, type_str in params.items():
-        ret_str += f'| *{name}*   | {type_order_dict.get(type_str, type_str)} | {format_types_as_md_str(get_component_type(type_str))} | {size_dict.get(type_str, type_str)} |\n'
+        ret_str += f'| *{name}* | {type_order_dict.get(type_str, type_str)} | {format_types_as_md_str(get_component_type(type_str))} | {size_dict.get(type_str, type_str)} |\n'
     return ret_str
 
 def gen_remarks(hl_op_name):
