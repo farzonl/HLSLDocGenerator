@@ -211,7 +211,8 @@ def md_table_to_dict(md_file):
         cells = row.find_all('td')
         name = cells[name_index].get_text(strip=True)
         name = name.replace("\n", " ")
-        print(name)
+        a_tag = cells[0].find('a')
+        md_link = a_tag['href']
         description = cells[desc_index].get_text(strip=True)
         # shaders only went from 1-5 before DXC
         # after is 6.0-6.8
@@ -219,7 +220,7 @@ def md_table_to_dict(md_file):
         shader_version = cells[shader_index].get_text(strip=True)
         if (len(shader_version) > 1 and shader_version[1] != '.'):
             shader_version = cells[shader_index].get_text(strip=True)[0]
-        data[name] = [description, shader_version]
+        data[name] = [description, shader_version, md_link]
 
     return data
 
@@ -738,28 +739,28 @@ def generate_scratch_file(
 
 def printHLSLDoc():
     hlsl_intrinsic_doc_dict = md_table_to_dict(full_md_filepath)
-    intrinsics_no_docs = []
-    hlsl_intrinsics_count = 0
-    texture_list = ['tex1D', 'tex1D', 'tex2D', 'tex2D', 'tex3D', 'tex3D', 'texCUBE', 'texCUBE']
-    for hl_op in db_hlsl.intrinsics:
-        if (hl_op.ns != "Intrinsics") or hl_op.name == 'source_mark':
-            continue
-        hlsl_intrinsics_count = hlsl_intrinsics_count + 1
-        if hl_op.name in hlsl_intrinsic_doc_dict:
-            print(
-                f'{hl_op.name} args {len(hl_op.params)} docs: {hlsl_intrinsic_doc_dict[hl_op.name]}')
-        elif hl_op.name in texture_list:
-            hl_op_temp_name = f'{hl_op.name}(s, t)'
-            if len(hl_op.params) == 5:
-               hl_op_temp_name = f'{hl_op.name}(s, t, ddx, ddy)'
-            print(
-                f'{hl_op_temp_name} args {len(hl_op.params)} docs: {hlsl_intrinsic_doc_dict[hl_op_temp_name]}')
-        else:
-            intrinsics_no_docs.append(hl_op.name)
-    print("no docs:")
-    print(intrinsics_no_docs)
-    print(
-        f'percentage without docs: {100.0 * (len(intrinsics_no_docs)/ hlsl_intrinsics_count)}%')
+    #intrinsics_no_docs = []
+    #hlsl_intrinsics_count = 0
+    #texture_list = ['tex1D', 'tex1D', 'tex2D', 'tex2D', 'tex3D', 'tex3D', 'texCUBE', 'texCUBE']
+    #for hl_op in db_hlsl.intrinsics:
+    #    if (hl_op.ns != "Intrinsics") or hl_op.name == 'source_mark':
+    #        continue
+    #    hlsl_intrinsics_count = hlsl_intrinsics_count + 1
+    #    if hl_op.name in hlsl_intrinsic_doc_dict:
+    #        #print(
+    #            f'{hl_op.name} args {len(hl_op.params)} docs: {hlsl_intrinsic_doc_dict[hl_op.name]}')
+    #    elif hl_op.name in texture_list:
+    #        hl_op_temp_name = f'{hl_op.name}(s, t)'
+    #        if len(hl_op.params) == 5:
+    #           hl_op_temp_name = f'{hl_op.name}(s, t, ddx, ddy)'
+    #        print(
+    #            f'{hl_op_temp_name} args {len(hl_op.params)} docs: {hlsl_intrinsic_doc_dict[hl_op_temp_name]}')
+    #    else:
+    #        intrinsics_no_docs.append(hl_op.name)
+    #print("no docs:")
+    #print(intrinsics_no_docs)
+    #print(
+    #    f'percentage without docs: {100.0 * (len(intrinsics_no_docs)/ hlsl_intrinsics_count)}%')
 
 
 def build_dxc(rebuild: bool = False, cov_build : bool = False):
@@ -2571,6 +2572,8 @@ def serialize_dict(dictionary, file_path):
 
 # Function to deserialize the dictionary
 def deserialize_dict(file_path):
+    if os.path.getsize(file_path) == 0:
+        return {}
     with open(file_path, 'rb') as file:
         return pickle.load(file)
 
