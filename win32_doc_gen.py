@@ -42,8 +42,8 @@ undocumented_apis = [
     "DispatchMesh",
     "AllocateRayQuery",
     "CreateResourceFromHeap",
-    #"and",
-    #"or",
+    "and",
+    "or",
     "select",
     "Barrier",
     "GetRemainingRecursionLevels",
@@ -150,7 +150,7 @@ def parse_size_and_type(s: str)-> Tuple[str, str, str]:
     if s == 'udt':
         return ('1', '[**RayPayload**](../direct3d12/ray-payload.md) [**Struct**](../direct3dhlsl/dx-graphics-hlsl-struct.md)', 'RayPayload Struct')
     if s == 'resource':
-        return ('1', '[**Resource Types](../direct3d12/resource-binding-in-hlsl.md)', 'resource')
+        return ('1', '[**Resource Types**](../direct3d12/resource-binding-in-hlsl.md)', 'resource')
     return ('1', '[**scalar**](../direct3dhlsl/dx-graphics-hlsl-scalar.md)', 'scalar')
 
 
@@ -459,9 +459,9 @@ shader_functions = {
     "DispatchMesh": {"Description": "Is used to dispatch mesh shader threads for processing mesh primitives.", "Minimum shader model": 6.5},
     "AllocateRayQuery": {"Description": "Allocates resources for ray queries in ray tracing shaders.", "Minimum shader model": 6.5},
     "CreateResourceFromHeap": {"Description": "Creates a resource from a heap, typically used for dynamic resource allocation.", "Minimum shader model": 6.6},
-    "and": {"Description": "", "Minimum shader model": ""},
-    "or": {"Description": "", "Minimum shader model": ""},
-    "select": {"Description": "A conditional selection function that chooses between two values based on a condition.", "Minimum shader model": ""},
+    "and": {"Description": "", "Minimum shader model": "HLSL 2021"},
+    "or": {"Description": "", "Minimum shader model": "HLSL 2021"},
+    "select": {"Description": "A conditional selection function that chooses between two values based on a condition.", "Minimum shader model": "HLSL 2021"},
     "Barrier": {"Description": "Request a barrier for a set of memory types and/or thread group execution sync.", "Minimum shader model": 6.8},
     "GetRemainingRecursionLevels": {"Description": "Returns how many levels of recursion remain.", "Minimum shader model": 6.8},
     "InterlockedCompareStoreFloatBitwise" :  {"Description": "Atomic compare and store for floats.", "Minimum shader model": 6.6},
@@ -502,13 +502,15 @@ remarks_base = {
     "DispatchMesh": "DispatchMesh dispatches thread groups for mesh shaders, allowing flexible thread group generation based on runtime conditions.",
     "AllocateRayQuery": "AllocateRayQuery allocates resources for ray tracing queries, facilitating interactive ray tracing applications.",
     "CreateResourceFromHeap": "CreateResourceFromHeap creates a resource from a specified heap, enabling efficient resource management in GPU programming.",
-    "select": "select chooses between two values based on a condition, providing conditional assignment in shader computations.",
+    "select": "In HLSL 2021  `int3 Z = select(X, 1, 0);` is a replacement for ```hlsl\nint3 X = {1, 1, 1};\nint3 Z = X ? 1 : 0;\n```",
     "Barrier": "Barrier synchronizes threads within a shader, ensuring data consistency and facilitating parallel computation.",
     "GetRemainingRecursionLevels": "GetRemainingRecursionLevels retrieves the remaining levels of recursion in a shader program, useful for managing recursive algorithms.",
     "InterlockedCompareStoreFloatBitwise" : "The floating-point overrides of these functions  use the same operations by the existing integer functions. Therefore, these overrides are supported on SM 6.0 even without capability bits.",
     "InterlockedCompareExchangeFloatBitwise" : "The floating-point overrides of these functions  use the same operations by the existing integer functions. Therefore, these overrides are supported on SM 6.0 even without capability bits.",
     "WorldToObject" : "This is the inverse of the ObjectToWorld transformation",
     "ObjectToWorld" : "This is the inverse of the WorldToObject transformation",
+    "and" : "In HLSL 2021 `and(X, Y);` is a replacement for ```hlsl\nint3 X = {1, 1, 1};\nint3 Y = {0, 0, 0};\nbool3 Cond = X && Y;\n```",
+    "or"  : "In HLSL 2021 `or(X, Y);` is a replacement for ```hlsl\nint3 X = {1, 1, 1};\nint3 Y = {0, 0, 0};\nbool3 Cond = X || Y;\n```"
 
 }
 
@@ -543,7 +545,9 @@ see_also_base = {'NonUniformResourceIndex' : '**See [NonUniformResourceIndex sem
                 'DispatchMesh' : '**See [DispatchMesh - intrinsic](https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-intrinsic)**',
                 'AllocateRayQuery' : '',
                 'CreateResourceFromHeap' : '',
-                'select' : '',
+                'or' : '** See [HLSL 2021 Logical operation short-circuiting for scalars](https://github.com/microsoft/DirectXShaderCompiler/wiki/HLSL-2021#logical-operation-short-circuiting-for-scalars)**',
+                'and' : '** See [HLSL 2021 Logical operation short-circuiting for scalars](https://github.com/microsoft/DirectXShaderCompiler/wiki/HLSL-2021#logical-operation-short-circuiting-for-scalars)**',
+                'select' : '** See [HLSL 2021 Logical operation short-circuiting for scalars](https://github.com/microsoft/DirectXShaderCompiler/wiki/HLSL-2021#logical-operation-short-circuiting-for-scalars)**',
                 'Barrier' : '**See [Work Graphs Barrier Types](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs.html#barrier)**',
                 'GetRemainingRecursionLevels' : '**See [GetRemainingRecursionLevels](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs.html#getremainingrecursionlevels)**',
                 'InterlockedCompareStoreFloatBitwise' : '** See [InterlockedCompareStoreFloatBitwise](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Int64_and_Float_Atomics.html#interlockedcomparestorefloatbitwise)**', 
@@ -553,9 +557,9 @@ see_also_base = {'NonUniformResourceIndex' : '**See [NonUniformResourceIndex sem
                 }
 
 shader_model_dict = {'6.0' : '[Shader Model 6](../direct3dhlsl/shader-model-6-0.md)', 
-                     '6.1' : 'Shader Model 6.1', 
-                     '6.2' : 'Shader Model 6.2', 
-                     '6.3' : 'Shader Model 6.3', 
+                     '6.1' : '[Shader Model 6.1](https://github.com/microsoft/DirectXShaderCompiler/wiki/Shader-Model-6.1)', 
+                     '6.2' : '[Shader Model 6.2](https://github.com/microsoft/DirectXShaderCompiler/wiki/Shader-Model-6.2)', 
+                     '6.3' : '[Shader Model 6.3](https://github.com/microsoft/DirectXShaderCompiler/wiki/Shader-Model-6.3)', 
                      '6.4' : '[Shader Model 6.4](../direct3dhlsl/hlsl-shader-model-6-4-features-for-direct3d-12.md)', 
                      '6.5' : '[Shader Model 6.5](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_5)', 
                      '6.6' : '[Shader Model 6.6](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_ShaderModel6_6)', 
