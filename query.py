@@ -1039,7 +1039,10 @@ def get_intrinsic_param_types(func_names: list[str]):
                     params["ret"] = param.type_name
                 else:
                     params[param.name] = param.type_name
-            func_params[hl_op.name] = params
+            if hl_op.name in func_params:
+                func_params[hl_op.name].append(params)
+            else:
+                func_params[hl_op.name] = [params]
     return func_params
 
 def dxc_shader_model_helper(dxc_sm):

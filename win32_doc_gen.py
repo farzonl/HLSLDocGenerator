@@ -9,6 +9,7 @@ import re
 import pathlib
 from typing import Tuple, List
 
+use_open_ai_content = False
 
 undocumented_apis = [
     "NonUniformResourceIndex",
@@ -229,7 +230,7 @@ def ask_openai_to_document_hlsl_intrinsic(intrinsic_name, params):
         print(function_call) # an error occured
     return arguments
 
-def document_hlsl_intrinsic(intrinsic_name, params):
+def document_hlsl_intrinsic(intrinsic_name, param_set):
     scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
     os.makedirs(scratchpad_path, exist_ok=True)
     file_path = os.path.join(scratchpad_path, 'open_ai_doc.json')
@@ -238,18 +239,24 @@ def document_hlsl_intrinsic(intrinsic_name, params):
     if intrinsic_name in cache:
         return cache[intrinsic_name]
 
-    # Key does not exist, call the expensive function
-    data = ask_openai_to_document_hlsl_intrinsic(intrinsic_name, params)
-    if data:
-        cache[intrinsic_name] = data
-        save_cache(file_path, cache)
-    return data
+    for params in param_set:
+        # Key does not exist, call the expensive function
+        data = ask_openai_to_document_hlsl_intrinsic(intrinsic_name, params)
+        if data:
+            if intrinsic_name not in cache:
+                cache[intrinsic_name] = [data]
+            else:
+                 cache[intrinsic_name].append(data)
+            save_cache(file_path, cache)
+    
+    return cache[intrinsic_name]
 
 shader_functions = {
     "abort": {"Description": "Terminates the current draw or dispatch call being executed.", "Minimum shader model": 4},
     "abs": {"Description": "Absolute value (per component).", "Minimum shader model": 1},
     "acos": {"Description": "Returns the arccosine of each component of x.", "Minimum shader model": 1},
     "all": {"Description": "Test if all components of x are nonzero.", "Minimum shader model": 1},
+    "AddUint64": {"Description": "Unsigned add of 32-bit operand with the carry", "Minimum shader model":  6.0 },
     "AllMemoryBarrier": {"Description": "Blocks execution of all threads in a group until all memory accesses have been completed.", "Minimum shader model": 5},
     "AllMemoryBarrierWithGroupSync": {"Description": "Blocks execution of all threads in a group until all memory accesses have been completed and all threads in the group have reached this call.", "Minimum shader model": 5},
     "any": {"Description": "Test if any component of x is nonzero.", "Minimum shader model": 1},
@@ -511,8 +518,15 @@ remarks_base = {
     "ObjectToWorld" : "This is the inverse of the WorldToObject transformation",
     "and" : "In HLSL 2021 `and(X, Y);` is a replacement for\n```hlsl\nint3 X = {1, 1, 1};\nint3 Y = {0, 0, 0};\nbool3 Cond = X && Y;\n```",
     "or"  : "In HLSL 2021 `or(X, Y);` is a replacement for\n```hlsl\nint3 X = {1, 1, 1};\nint3 Y = {0, 0, 0};\nbool3 Cond = X || Y;\n```"
-
 }
+
+def get_remarks(hl_func_name: str) -> str:
+    if use_open_ai_content:
+        return remarks_base.get(hl_func_name, '')
+    if hl_func_name in ['select', 'and', 'or']:
+        return remarks_base[hl_func_name]
+    return ''
+
 
 see_also_base = {'NonUniformResourceIndex' : '**See [NonUniformResourceIndex semantics](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs#nonuniformresourceindex-semantics)**\n - [**Resource Binding**](../direct3d12/resource-binding-in-hlsl.md).', 
                 'AddUint64' : '',
@@ -545,13 +559,13 @@ see_also_base = {'NonUniformResourceIndex' : '**See [NonUniformResourceIndex sem
                 'DispatchMesh' : '**See [DispatchMesh - intrinsic](https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-intrinsic)**',
                 'AllocateRayQuery' : '',
                 'CreateResourceFromHeap' : '',
-                'or' : '** See [HLSL 2021 Logical operation short-circuiting for scalars](https://github.com/microsoft/DirectXShaderCompiler/wiki/HLSL-2021#logical-operation-short-circuiting-for-scalars)**',
-                'and' : '** See [HLSL 2021 Logical operation short-circuiting for scalars](https://github.com/microsoft/DirectXShaderCompiler/wiki/HLSL-2021#logical-operation-short-circuiting-for-scalars)**',
-                'select' : '** See [HLSL 2021 Logical operation short-circuiting for scalars](https://github.com/microsoft/DirectXShaderCompiler/wiki/HLSL-2021#logical-operation-short-circuiting-for-scalars)**',
+                'or' : '**See [HLSL 2021 Logical operation short-circuiting for scalars](https://github.com/microsoft/DirectXShaderCompiler/wiki/HLSL-2021#logical-operation-short-circuiting-for-scalars)**',
+                'and' : '**See [HLSL 2021 Logical operation short-circuiting for scalars](https://github.com/microsoft/DirectXShaderCompiler/wiki/HLSL-2021#logical-operation-short-circuiting-for-scalars)**',
+                'select' : '**See [HLSL 2021 Logical operation short-circuiting for scalars](https://github.com/microsoft/DirectXShaderCompiler/wiki/HLSL-2021#logical-operation-short-circuiting-for-scalars)**',
                 'Barrier' : '**See [Work Graphs Barrier Types](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs.html#barrier)**',
                 'GetRemainingRecursionLevels' : '**See [GetRemainingRecursionLevels](https://microsoft.github.io/DirectX-Specs/d3d/WorkGraphs.html#getremainingrecursionlevels)**',
-                'InterlockedCompareStoreFloatBitwise' : '** See [InterlockedCompareStoreFloatBitwise](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Int64_and_Float_Atomics.html#interlockedcomparestorefloatbitwise)**', 
-                'InterlockedCompareExchangeFloatBitwise' : '** See [InterlockedCompareStoreFloatBitwise](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Int64_and_Float_Atomics.html#interlockedcompareexchange)**', 
+                'InterlockedCompareStoreFloatBitwise' : '**See [InterlockedCompareStoreFloatBitwise](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Int64_and_Float_Atomics.html#interlockedcomparestorefloatbitwise)**', 
+                'InterlockedCompareExchangeFloatBitwise' : '**See [InterlockedCompareStoreFloatBitwise](https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Int64_and_Float_Atomics.html#interlockedcompareexchange)**', 
                 'ObjectToWorld' :  '**See [DXR Functional Spec](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html)**',
                 'WorldToObject' :  '**See [DXR Functional Spec](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html)**',
                 }
@@ -591,55 +605,81 @@ def gen_metadata(hl_op_name, short_description):
     return ret_str
 
 def gen_header(hl_op_name):
-    short_description = shader_functions[hl_op_name]["Description"]
+    short_description = ''
+    if use_open_ai_content:
+        short_description = shader_functions[hl_op_name]["Description"]
+
     meta_data = gen_metadata(hl_func_name,short_description) + '\n'                                         
     return f'{meta_data}# {hl_op_name}\n\n{short_description}\n\n'
 
 
-def gen_syntax(hl_op_name, params):
+def gen_syntax(hl_op_name, param_set):
     ret_str = '## Syntax\n\n\n'
-    ret_str += '```syntax\n'
-    func_signature = f'{params["ret"]} {hl_op_name}('
-    for name, type_str in params.items():
-        if name == 'ret':
-             continue
-        func_signature += f'{type_str} {name}, '
-    func_signature = func_signature.rstrip(", ") + ");\n"
-    ret_str += f'{func_signature}```\n\n'
+    for params in param_set:
+        ret_str += '```syntax\n'
+        func_signature = f'{params["ret"]} {hl_op_name}('
+        for name, type_str in params.items():
+            if name == 'ret':
+                 continue
+            func_signature += f'{type_str} {name}, '
+        func_signature = func_signature.rstrip(", ") + ");\n"
+        ret_str += f'{func_signature}```\n\n'
     return ret_str
 
 
-def gen_params(hl_func):
-    table_str =  '| Item | Description |\n'
-    params = hl_func.get("parameter_descriptions",[])
-    table_str += '|------|-------------|\n'
-    ret_params = f'## Parameters\n\n{"This function has no parameters.\n\n" if len(params) == 0 else table_str}'
-    for param in params:
-        name = param['name']
-        description = param['description']
-        ret_params +=f'| *{name}* | [in] {description}  |\n'
+def gen_params(hl_funcs):
+    ret_params = ''
+    for hl_func in hl_funcs:
+        table_str =  '| Item | Description |\n'
+        params = hl_func.get("parameter_descriptions",[])
+        table_str += '|------|-------------|\n'
+        ret_params += f'## Parameters\n\n{"This function has no parameters.\n\n" if len(params) == 0 else table_str}'
+        for param in params:
+            name = param['name']
+            description = param['description']
+            ret_params +=f'| *{name}* | [in] {description}  |\n'
+        ret_params +='\n'
     return ret_params
 
-def gen_return(hl_func):
-    ret  = hl_func["return_description"]
-    return f'## Return value\n\n {ret}'
+def ordinal(n):
+    if 10 <= n % 100 <= 20:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    return str(n) + suffix
 
-def gen_type_description(params):
-    ret_str = '## Type Description\n\n'
-    ret_str += '| Name  | [**Template Type**](../direct3dhlsl/dx-graphics-hlsl-data-types.md)| [**Component Type**](../direct3dhlsl/dx-graphics-hlsl-data-types.md) | Size |\n'
-    ret_str += '|-------|--------------------------------------------------------------------|----------------------------------------------------------------------|------|\n'
+def gen_return(hl_funcs):
+    if len(hl_funcs) == 1:
+        return f'## Return value\n\n{hl_funcs[0]["return_description"]}\n'
+    
+    ret = '## Return value(s)\n\n'
+    for index, hl_func in enumerate(hl_funcs):
+        ret += f'### {ordinal(index+1)} return value\n\n {hl_func["return_description"]}\n'
+    return ret
 
-    for name, type_str in params.items():
-        ret_str += f'| *{name}* | {type_order_dict.get(type_str, type_str)} | {format_types_as_md_str(get_component_type(type_str))} | {size_dict.get(type_str, type_str)} |\n'
+def gen_type_description(param_set):
+    ret_str = ''
+    for params in param_set:
+        ret_str += '## Type Description\n\n'
+        ret_str += '| Name  | [**Template Type**](../direct3dhlsl/dx-graphics-hlsl-data-types.md)| [**Component Type**](../direct3dhlsl/dx-graphics-hlsl-data-types.md) | Size |\n'
+        ret_str += '|-------|--------------------------------------------------------------------|----------------------------------------------------------------------|------|\n'
+
+        for name, type_str in params.items():
+            ret_str += f'| *{name}* | {type_order_dict.get(type_str, type_str)} | {format_types_as_md_str(get_component_type(type_str))} | {size_dict.get(type_str, type_str)} |\n'
     return ret_str
 
 def gen_remarks(hl_op_name):
+    remarks_specific = get_remarks(hl_op_name)
+    if remarks_specific == '':
+        return ''
+    
     ret_str = '## Remarks\n\n'
-    remarks_specific = remarks_base[hl_op_name]
     ret_str += f'{remarks_specific}\n'
     return ret_str
 
 def gen_see_also(hl_op_name):
+    if hl_op_name not in see_also_base:
+        return ''
     ret_str = '## See also\n\n'
     ret_str += '\n- [**Intrinsic Functions (DirectX HLSL)**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-functions.md)'
     see_also_specific = see_also_base[hl_op_name]
@@ -654,9 +694,24 @@ def gen_min_shader_model(hl_op_name, hlsl_to_dxil_op, dxil_op_to_docs):
     ret_str += '|Shader Model |	Supported|\n'
     ret_str += '|-------------|----------|\n'
     dxil_op = hlsl_to_dxil_op.get(hl_op_name,-1)
+    shader_model_str = ''
     if dxil_op != -1:
         dxil_docs = dxil_op_to_docs[dxil_op]
-        ret_str += f'|{shader_model_dict[dxil_docs[1]]} and higher shader models | yes |\n'
+       
+        shader_model_str = shader_model_dict[dxil_docs[1]]
+        if hl_op_name == 'AddUint64':
+            print(shader_model_str)
+    else:
+        if hl_op_name in ['and', 'or', 'select']:
+            shader_model_str = shader_functions[hl_op_name]["Minimum shader model"]
+        else:
+            sm_int = shader_functions[hl_op_name]["Minimum shader model"]
+            sm_str = '6.0'
+            if sm_int > 6.0:
+                sm_str = str(sm_int)
+            shader_model_str = shader_model_dict[sm_str]
+    
+    ret_str += f'|{shader_model_str} and higher shader models | yes |\n'
     return ret_str
 
 def gen_shader_stages(hl_op_name, hlsl_to_dxil_op, dxil_op_to_docs):
@@ -680,7 +735,13 @@ def write_docs(file_name : str, md_content: str):
     with open(file_path, 'w') as file:
         file.write(md_content)
 
-
+def AddUint64_post_processing(hl_func_name, param_set):
+    if hl_func_name == 'AddUint64':
+        return  [
+            {'ret': 'uint<2>', 'a': 'uint<2>', 'b': 'uint<2>'}, 
+            {'ret': 'uint<4>', 'a': 'uint<4>', 'b': 'uint<4>'}
+            ]
+    return param_set
 if __name__ == "__main__":
     gen_type_and_size_dict()
     keys = ApiKeys.parse_api_keys()
@@ -689,17 +750,20 @@ if __name__ == "__main__":
     dxil_op_to_docs = query_dxil()
 
     hl_func_params = get_intrinsic_param_types(undocumented_apis)
-    for hl_func_name, params in hl_func_params.items():
+    for hl_func_name, param_set in hl_func_params.items():
         print(hl_func_name)
-        hl_func_documentation = document_hlsl_intrinsic(hl_func_name, params)
+        print(param_set)
+        param_set = AddUint64_post_processing(hl_func_name, param_set)
+        hl_funcs_documentation = document_hlsl_intrinsic(hl_func_name, param_set)
 
-        md_file = gen_header(hl_func_name)
-        md_file += gen_syntax(hl_func_name, params)
-        md_file += gen_params(hl_func_documentation) + '\n'
-        md_file += gen_return(hl_func_documentation) + '\n'
-        md_file += gen_type_description(params) + '\n'
+        md_file = gen_header(hl_func_name) + '\n'
+        md_file += gen_syntax(hl_func_name, param_set)  + '\n'
+        if use_open_ai_content:
+            md_file += gen_params(hl_funcs_documentation) + '\n'
+            md_file += gen_return(hl_funcs_documentation) + '\n'
+        md_file += gen_type_description(param_set) + '\n'
         md_file += gen_min_shader_model(hl_func_name, hlsl_to_dxil_op, dxil_op_to_docs) + '\n'
         md_file += gen_shader_stages(hl_func_name, hlsl_to_dxil_op, dxil_op_to_docs) + '\n'
-        md_file += gen_remarks(hl_func_name)
+        md_file += gen_remarks(hl_func_name) + '\n'
         md_file += gen_see_also(hl_func_name)
         write_docs(hl_func_name, md_file)
