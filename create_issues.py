@@ -16,8 +16,8 @@ import traceback
 
 
 # GitHub repository and personal access token
-REPO_OWNER = 'farzonl'
-REPO_NAME = 'test_repo'
+REPO_OWNER = 'llvm'
+REPO_NAME = 'llvm-project'
 GITHUB_TOKEN = ''
 
 deprecated_intrinsics = []
@@ -385,6 +385,9 @@ def load_all_test_cases():
         if hl_op_name in base_test_cases:
             base_test_cases[hl_op_name].append('### SPIRV Example(s):')
             base_test_cases[hl_op_name].extend(test_cases)
+
+    #for _, testcases in base_test_cases.items():
+    #    print(testcases[0].splitlines()[0])
     return base_test_cases
 
 def gen_test_case_body(intrinsic_name, hlsl_intrinsics_test_cases):
@@ -400,6 +403,8 @@ def gen_test_case_body(intrinsic_name, hlsl_intrinsics_test_cases):
     return body
 
 def create_group_github_issue(succesfully_created_issues):
+    if(len(succesfully_created_issues) < 155):
+        return
     title = 'Implement the entire HLSL API set.'
     if title not in succesfully_created_issues:
         labels = ['HLSL', 'backend:SPIR-V', 'backend:DirectX', 'metabug', 'bot:HLSL']
