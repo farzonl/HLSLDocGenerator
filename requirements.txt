@@ -1,3 +1,4 @@
+chardet==5.2.0
 pypandoc==1.13
 pandas==2.2.2
 plotly==5.22.0
