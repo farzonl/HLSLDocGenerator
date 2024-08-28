@@ -7,6 +7,7 @@ import sys
 from collections import defaultdict
 
 import plotly.graph_objects as go
+import chardet
 
 # pylint: disable=wrong-import-position
 sys.path.append(os.path.join(os.getcwd(), "DirectXShaderCompiler/utils/hct"))
@@ -208,7 +209,10 @@ def get_git_commits(repo_path: str, file_path : str):
         closest_commit = min(commits, key=lambda x: enforce_date_range(x.committed_datetime, current_date))
     
         # Get the version of the file in the closest commit
-        version = closest_commit.tree[file_path].data_stream.read().decode('utf-8')
+
+        raw_data = closest_commit.tree[file_path].data_stream.read()
+        encoding = chardet.detect(raw_data)['encoding']
+        version = raw_data.decode(encoding)
         file_versions.append((current_date, version, closest_commit.hexsha))
     
         current_date += week_delta
