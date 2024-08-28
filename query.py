@@ -605,7 +605,7 @@ def generate_hull(func_name, params, type_index: TypeIndex, is_spirv):
     ps_scene_in = 'struct PSSceneIn {\n\tfloat4 pos : SV_Position;\n\tfloat2 tex : TEXCOORD0;\n\tfloat3 norm : NORMAL;\n};\n'
     hs_per_vertex_data = 'struct HSPerVertexData {\n\tPSSceneIn v;\n};\n'
     data_structures = f'{hs_per_patch_data}{ps_scene_in}{hs_per_vertex_data}'
-    main_fn_attr = f'[domain("tri")]\n[outputtopology("triangle_cw")]\n[patchconstantfunc("fn")]\n[outputcontrolpoints(3)]\n[partitioning({"\"integer\"" if is_spirv else "\"pow2\""})]'
+    main_fn_attr = f'[domain("tri")]\n[outputtopology("triangle_cw")]\n[patchconstantfunc("fn")]\n[outputcontrolpoints(3)]\n[partitioning({"integer" if is_spirv else "pow2"})]'
     main_fn_sig = 'HSPerVertexData main( const uint id : SV_OutputControlPointID,const InputPatch< PSSceneIn, 3 > points ) {'
     main_fn_body = '\n\tHSPerVertexData v;\n\tv.v = points[ id ];\n\treturn v;\n}'
 
