@@ -83,10 +83,17 @@ def llvm_graph_hlsl_intrinsics(data=None):
     intrinsics = [ int_count for _, int_count, _, _, _ in data]
     percentages = [ percentage for _, _, percentage, _, _ in data]
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=dates, y=intrinsics, mode='lines', name='HLSL intrinsics'))
-    fig.add_trace(go.Scatter(x=dates, y=percentages, mode='lines', name='HLSL int %'))
+    fig.add_trace(go.Scatter(x=dates, y=intrinsics, mode='lines', name='HLSL intrinsics', line_color='rgb(0,255,0)'))
+    fig.add_trace(go.Scatter(x=dates, y=percentages, mode='lines', name='HLSL int %', line_color='rgb(0,255, 125)'))
 
     fig.update_layout(title='HLSL Intrinsics Over Time',
+                   title_font=dict(color='green'),
+                   paper_bgcolor='rgba(0,0,0,0)',
+                   plot_bgcolor='rgba(0,0,0,0)',
+                   legend_title_font_color='white',
+                   font_color="white",
+                   xaxis_color='white',
+                   yaxis_color='white',
                    xaxis_title='Date',
                    yaxis_title='HLSL Intrinsics',
                    showlegend=True)
@@ -171,10 +178,17 @@ def llvm_graph_dxil_intrinsics(data=None):
     dxilops = [ dxil_count for _, dxil_count, _, _, _, _ in data]
     percentages = [  int_per for _, _,  int_per, _, _, _ in data]
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=dates, y=dxilops, mode='lines', name='DXIL Ops'))
-    fig.add_trace(go.Scatter(x=dates, y=percentages, mode='lines', name='DXIL Ops %'))
-
+    fig.add_trace(go.Scatter(x=dates, y=dxilops, mode='lines', name='DXIL Ops', line_color='rgb(0,255,0)'))
+    fig.add_trace(go.Scatter(x=dates, y=percentages, mode='lines', name='DXIL Ops %', line_color='rgb(0,255,125)'))
+    
     fig.update_layout(title='DXIL Opcodes Over Time',
+                   title_font=dict(color='green'),
+                   paper_bgcolor='rgba(0,0,0,0)',
+                   plot_bgcolor='rgba(0,0,0,0)',
+                   legend_title_font_color='white',
+                   font_color="white",
+                   xaxis_color='white',
+                   yaxis_color='white',
                    xaxis_title='Date',
                    yaxis_title='# of Completed DXIL Opcodes',
                    showlegend=True)
@@ -303,10 +317,17 @@ def llvm_graph_spirv_intrinsics(data=None):
     dxilops = [ dxil_count for _, dxil_count, _, _, _, _ in data]
     percentages = [  int_per for _, _,  int_per, _, _, _ in data]
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=dates, y=dxilops, mode='lines', name='SPIRV Ops'))
-    fig.add_trace(go.Scatter(x=dates, y=percentages, mode='lines', name='SPIRV Ops %'))
+    fig.add_trace(go.Scatter(x=dates, y=dxilops, mode='lines', name='SPIRV Ops', line_color='rgb(0,255,0)'))
+    fig.add_trace(go.Scatter(x=dates, y=percentages, mode='lines', name='SPIRV Ops %', line_color='rgb(0,255,125)'))
 
     fig.update_layout(title='SPIRV Opcodes Over Time',
+                   title_font=dict(color='green'),
+                   paper_bgcolor='rgba(0,0,0,0)',
+                   plot_bgcolor='rgba(0,0,0,0)',
+                   legend_title_font_color='white',
+                   font_color="white",
+                   xaxis_color='white',
+                   yaxis_color='white',
                    xaxis_title='Date',
                    yaxis_title='# of Completed SPIRV Opcodes',
                    showlegend=True)
