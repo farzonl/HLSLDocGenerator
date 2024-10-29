@@ -55,7 +55,8 @@ def getopNames(opcodes):
     return opcodeNames
 
 def extract_all_opcodes(text):
-    matches = re.findall(r'def\s+\w+\s*:\s*DXILOpMapping<\s*(\d+)', text)
+    matches = re.findall(r'def\s+\w+\s*:\s*DXILOp(?:Mapping)?<\s*(\d+)(?:,\s*\w+)?', text)
+
     if matches:
        return matches
     return []
