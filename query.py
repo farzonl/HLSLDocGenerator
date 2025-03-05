@@ -84,7 +84,7 @@ spirv_unimplemented = [ 'AddUint64', 'WaveMultiPrefixCountBits', 'EvaluateAttrib
                        'InterlockedCompareStoreFloatBitwise', 'InterlockedCompareExchangeFloatBitwise',
                        'QuadAny', 'QuadAll', 'ObjectToWorld', 'WorldToObject', 'Barrier', 'GetRemainingRecursionLevels']
 
-spirv_broken = ['asdouble', 'asuint', 'and', 'or']
+spirv_broken = ['asdouble', 'asuint']
 
 vulkan_pixel_shader = ['WaveGetLaneCount', 'WaveGetLaneIndex', 'InstanceIndex', 'PrimitiveIndex']
 

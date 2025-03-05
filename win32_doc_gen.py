@@ -41,8 +41,8 @@ undocumented_apis = [
     "pack_clamp_u8",
     "SetMeshOutputCounts",
     "DispatchMesh",
-    #"AllocateRayQuery",
-    #"CreateResourceFromHeap",
+    "AllocateRayQuery",
+    "CreateResourceFromHeap",
     "and",
     "or",
     "select",
@@ -466,8 +466,8 @@ shader_functions = {
     "DispatchMesh": {"Description": "Is used to dispatch mesh shader threads for processing mesh primitives.", "Minimum shader model": 6.5},
     "AllocateRayQuery": {"Description": "Allocates resources for ray queries in ray tracing shaders.", "Minimum shader model": 6.5},
     "CreateResourceFromHeap": {"Description": "Creates a resource from a heap, typically used for dynamic resource allocation.", "Minimum shader model": 6.6},
-    "and": {"Description": "", "Minimum shader model": "HLSL 2021"},
-    "or": {"Description": "", "Minimum shader model": "HLSL 2021"},
+    "and": {"Description": "Logically `and`s a vector and produces a bool vector output", "Minimum shader model": "All Shader Models with HLSL 2021 Language Mode"},
+    "or": {"Description": "Logically `or`s a vector and produces a bool vector output", "Minimum shader model": "All Shader Models with HLSL 2021 Language Mode"},
     "select": {"Description": "A conditional selection function that chooses between two values based on a condition.", "Minimum shader model": "HLSL 2021"},
     "Barrier": {"Description": "Request a barrier for a set of memory types and/or thread group execution sync.", "Minimum shader model": 6.8},
     "GetRemainingRecursionLevels": {"Description": "Returns how many levels of recursion remain.", "Minimum shader model": 6.8},
@@ -600,7 +600,7 @@ shader_stage_dict = {
 
 def gen_metadata(hl_op_name, short_description):
     ret_str =  f'---\ndescription: {short_description}\nnms.assetid:\ntitle: {hl_op_name}\n'                              
-    ret_str += f'ms.topic: reference\nms.date: {datetime.today().strftime('%m/%d/%Y')}\n'
+    ret_str += f"ms.topic: reference\nms.date: {datetime.today().strftime('%m/%d/%Y')}\n"
     ret_str += f'topic_type:\n- APIRef\n- kbSyntax\napi_name:\n- {hl_op_name}\napi_type:\n- NA\n---\n\n'
     return ret_str
 
@@ -633,7 +633,8 @@ def gen_params(hl_funcs):
         table_str =  '| Item | Description |\n'
         params = hl_func.get("parameter_descriptions",[])
         table_str += '|------|-------------|\n'
-        ret_params += f'## Parameters\n\n{"This function has no parameters.\n\n" if len(params) == 0 else table_str}'
+        param_text = "This function has no parameters.\n\n" if len(params) == 0 else table_str
+        ret_params += f'## Parameters\n\n{param_text}'
         for param in params:
             name = param['name']
             description = param['description']
@@ -684,7 +685,7 @@ def gen_see_also(hl_op_name):
     ret_str += '\n- [**Intrinsic Functions (DirectX HLSL)**](../direct3dhlsl/dx-graphics-hlsl-intrinsic-functions.md)'
     see_also_specific = see_also_base[hl_op_name]
     if see_also_specific != '':
-        ret_str += f'\n- {see_also_specific}'
+        ret_str += f'\n- {see_also_specific}\n'
     return ret_str
 
 
@@ -710,8 +711,8 @@ def gen_min_shader_model(hl_op_name, hlsl_to_dxil_op, dxil_op_to_docs):
             if sm_int > 6.0:
                 sm_str = str(sm_int)
             shader_model_str = shader_model_dict[sm_str]
-    
-    ret_str += f'|{shader_model_str} and higher shader models | yes |\n'
+    qualifier = 'and higher shader models' if hl_op_name not in ['or', 'and', 'select'] else ''
+    ret_str += f'|{shader_model_str} {qualifier} | yes |\n'
     return ret_str
 
 def gen_shader_stages(hl_op_name, hlsl_to_dxil_op, dxil_op_to_docs):
@@ -725,7 +726,9 @@ def gen_shader_stages(hl_op_name, hlsl_to_dxil_op, dxil_op_to_docs):
             if url != '':
                 ret_str += f'* [{name}]({url})\n'
             else:
-                ret_str += f'* {name}\n'                         
+                ret_str += f'* {name}\n'
+    elif hl_op_name in ['and', 'or']:
+        ret_str += '**All Shader Stages**\n'
     return ret_str
 
 def write_docs(file_name : str, md_content: str):
@@ -754,7 +757,8 @@ if __name__ == "__main__":
         print(hl_func_name)
         print(param_set)
         param_set = AddUint64_post_processing(hl_func_name, param_set)
-        hl_funcs_documentation = document_hlsl_intrinsic(hl_func_name, param_set)
+        if use_open_ai_content:
+            hl_funcs_documentation = document_hlsl_intrinsic(hl_func_name, param_set)
 
         md_file = gen_header(hl_func_name) + '\n'
         md_file += gen_syntax(hl_func_name, param_set)  + '\n'
