@@ -10,7 +10,10 @@ import re
 from cli import parser
 import shutil
 import csv
-from typing import List
+import json
+from collections import defaultdict
+
+from diff import diff_function_bodies
 
 # pylint: disable=wrong-import-position
 sys.path.append(os.path.join(os.getcwd(), "DirectXShaderCompiler/utils/hct"))
@@ -51,6 +54,9 @@ def gen_deprecated_intrinsics():
         matches = re.findall(pattern, int_def)
         return matches
 
+shader_models = ["6_0", "6_1", "6_2", "6_3", "6_4", "6_5", "6_6", "6_7", "6_8"]
+
+current_shaderModel = shader_models[-1]
 
 any_hit_intrinsics = ['IgnoreHit', 'AcceptHitAndEndSearch']
 
@@ -850,10 +856,6 @@ def run_hlsl_test(dxc_command, hlsl_name, hlsl_construct_to_opcode, fail_list, i
             opcode = extract_spirv_opcode(hlsl_name, result.stdout)
         else:
             opcode = extract_dxil_opcode(hlsl_name, result.stdout)
-        #if hlsl_name == 'QuadReadAcrossDiagonal':
-        #    print(opcode)
-        #    print(result.stdout)
-        #    exit(0)
         if (opcode is None):
             hlsl_construct_to_opcode[hlsl_name] = -1
         else:
@@ -863,6 +865,8 @@ def run_hlsl_test(dxc_command, hlsl_name, hlsl_construct_to_opcode, fail_list, i
     else:
         print_cli(result.stderr)
         fail_list.append(hlsl_name)
+    return result
+
 
 
 def dxc_intrinsic_run_helper(
@@ -872,20 +876,31 @@ def dxc_intrinsic_run_helper(
         hl_op_name,
         intrinsic_to_opcode,
         fail_list,
+        save_dxil_gen: bool,
+        shader_model: str,
         type_index: TypeIndex = TypeIndex.FloatType,
         vec_length: VecLength = VecLength.Vec4):
     file_name = hl_op_name + "_test.hlsl"
     scratchpad = os.path.join(scratchpad_path, file_name)
     dxc_command[1] = scratchpad
     if hl_op.name in hull_intrinsics:
-        dxc_command[2] = "-T hs_6_8"
+        dxc_command[2] = f'-T hs_{shader_model}'
+        dxc_command[3] = "-E fn"
+    elif shader_model == "6_0" or shader_model == "6_1" or shader_model == "6_2":
+        dxc_command[2] = f'-T vs_{shader_model}'
+        dxc_command[3] = "-E fn"
     else:
-        dxc_command[2] = "-T lib_6_8"
+        dxc_command[2] = f'-T lib_{shader_model}'
+        dxc_command[3] = ""
     first_line = f'//dxc {file_name} {" ".join(dxc_command[2:])}\n\n'
     payload = first_line + generate_scratch_file(
         hl_op.name, hl_op.params, type_index, vec_length)
     write_payload(scratchpad, payload)
-    run_hlsl_test(dxc_command, hl_op_name, intrinsic_to_opcode, fail_list)
+    result = run_hlsl_test(dxc_command, hl_op_name, intrinsic_to_opcode, fail_list)
+    if(result.returncode == 0):
+        dxil_file_name = hl_op_name + "_test.ll"
+        dxil_scratchpad = os.path.join(scratchpad_path, dxil_file_name)
+        write_payload(dxil_scratchpad, result.stdout)
 
 
 def dxc_intrinsic_spirv_run_helper(
@@ -896,18 +911,20 @@ def dxc_intrinsic_spirv_run_helper(
         intrinsic_to_opcode,
         fail_list,
         type_index: TypeIndex = TypeIndex.FloatType,
-        vec_length: VecLength = VecLength.Vec4):
+        vec_length: VecLength = VecLength.Vec4,
+        shader_model: str = current_shaderModel):
     file_name = hl_op_name + f'{"_spirv" if hl_op.name in special_spirv_example_code_intrinsics else ""}_test.hlsl'
     scratchpad = os.path.join(scratchpad_path, file_name)
     dxc_command[1] = scratchpad
     if hl_op.name in hull_intrinsics:
-        dxc_command[2] = "-T hs_6_8"
+        dxc_command[2] = f'-T hs_{shader_model}'
         dxc_command[3] = "-E main"
     elif hl_op.name in vulkan_pixel_shader:
-        dxc_command[2] = "-T ps_6_8"
+        dxc_command[2] = f'-T ps_{shader_model}'
         dxc_command[3] = "-E fn"
     else:
-        dxc_command[2] = "-T lib_6_8"
+        dxc_command[2] = f'-T lib_{shader_model}'
+        dxc_command[3] = ""
     first_line = f'//dxc {file_name} {" ".join(dxc_command[2:])}\n\n'
     payload = first_line + generate_scratch_file(
         hl_op.name, hl_op.params, type_index, vec_length, is_spirv=True)
@@ -916,16 +933,26 @@ def dxc_intrinsic_spirv_run_helper(
 
 
 # Run dxc
-def run_dxc():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def run_dxc(shader_model: str = current_shaderModel, save_dxil_gen : bool = False):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
-        "-enable-16bit-types",
-        "-O0"
+        f'-T lib_{shader_model}',
+        "",
+        "-O0",
+        "-enable-16bit-types"
     ]
+    
+    if shader_model == "6_0" or shader_model == "6_1":
+        dxc_command[5] = ""
+    
+    if shader_model == "6_0" or shader_model == "6_1" or shader_model == "6_2":
+        dxc_command[2] = f'-T vs_{shader_model}'
+        dxc_command[3] = "-E fn"
+    
+    
     deprecated_intrinsics = gen_deprecated_intrinsics()
     intrinsic_to_opcode = {}
     fail_list = []
@@ -951,6 +978,8 @@ def run_dxc():
                     hl_op_name,
                     intrinsic_to_opcode,
                     fail_list,
+                    save_dxil_gen,
+                    shader_model,
                     TypeIndex.FloatType,
                     vec_len)
                 hl_op_name = get_unique_name(hl_op.name, name_count)
@@ -965,6 +994,8 @@ def run_dxc():
                     hl_op_name,
                     intrinsic_to_opcode,
                     fail_list,
+                    save_dxil_gen,
+                    shader_model,
                     type_index)
                 hl_op_name = get_unique_name(hl_op.name, name_count)
         else:
@@ -974,7 +1005,9 @@ def run_dxc():
                 scratchpad_path,
                 hl_op_name,
                 intrinsic_to_opcode,
-                fail_list)
+                fail_list,
+                save_dxil_gen,
+                shader_model)
 
     print_cli(
         f"success %: {100.0 * ( (total_intrinsics - len(fail_list)) / total_intrinsics)}")
@@ -1293,8 +1326,8 @@ def gen_trace_rayline(params):
     return (6, ray_struct)
 
 
-def gen_wavematrix():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def gen_wavematrix(shader_model: str = current_shaderModel):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     wave_mat_main_types = ["Right", "Left"]
     wave_mat_acc_types = ["Accumulator"]
@@ -1308,7 +1341,7 @@ def gen_wavematrix():
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+        f'-T lib_{shader_model}',
         "-enable-16bit-types",
         "-O0",
         "-Vd"  # There is not shader model 6.9 yet so need to turn validator off
@@ -1403,13 +1436,13 @@ def gen_wavematrix():
     return wave_query_to_opcode
 
 
-def gen_ray_query():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def gen_ray_query(shader_model: str = current_shaderModel):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+        f'-T lib_{shader_model}',
         "-enable-16bit-types",
         "-O0"
     ]
@@ -1568,13 +1601,13 @@ def write_payload(scratchpad, payload):
         file.write(payload)
 
 
-def gen_semantics_hlsl():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def gen_semantics_hlsl(shader_model: str = current_shaderModel):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+        f'-T lib_{shader_model}',
         "-enable-16bit-types",
         "-O0"
     ]
@@ -1779,13 +1812,13 @@ def gen_get_dimensions(dxil_inst_name):
         fn_body)
 
 
-def gen_resources():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def gen_resources(shader_model: str = current_shaderModel):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+        f'-T lib_{shader_model}',
         "-enable-16bit-types",
         "-O0"
     ]
@@ -1906,13 +1939,13 @@ def gen_mesh_payload(dxil_inst_name):
         fn_data_strs)
 
 
-def gen_mesh_shader_instr():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def gen_mesh_shader_instr(shader_model: str = current_shaderModel):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+        f'-T lib_{shader_model}',
         "-enable-16bit-types",
         "-O0"
     ]
@@ -1984,13 +2017,13 @@ def gen_sample(dxil_inst_name):
     return payload
 
 
-def gen_resource_sample():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def gen_resource_sample(shader_model: str = current_shaderModel):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+        f'-T lib_{shader_model}',
         "-enable-16bit-types",
         "-O0"
     ]
@@ -2045,13 +2078,13 @@ def gen_sampler_feedback_test(dxil_inst_name, scratchpad):
     return payload
 
 
-def gen_sampler_feedback():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def gen_sampler_feedback(shader_model: str = current_shaderModel):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+        f'-T lib_{shader_model}',
         "-enable-16bit-types",
         "-O0"
     ]
@@ -2093,13 +2126,13 @@ def gen_geometry_shader_test(dxil_inst_name):
     return payload
 
 
-def gen_geometry_shader_instr():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def gen_geometry_shader_instr(shader_model: str = current_shaderModel):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+        f'-T lib_{shader_model}',
         "-enable-16bit-types",
         "-O0"
     ]
@@ -2146,13 +2179,13 @@ def gen_hull(dxil_inst_name):
     return payload
 
 
-def gen_hull_shader_instr():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def gen_hull_shader_instr(shader_model: str = current_shaderModel):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T hs_6_8",
+        f'-T hs_{shader_model}',
         "-E main",
         "-enable-16bit-types",
         "-O0"
@@ -2348,7 +2381,7 @@ def gen_create_handle_from_heap():
     return payload
 
 
-def gen_node_shader_instr():
+def gen_node_shader_instr(shader_model: str = current_shaderModel):
     work_graph_to_fn_name_dict = {
         "IncrementOutputCount": [
             "ThreadIncrementOutputCount",
@@ -2359,12 +2392,12 @@ def gen_node_shader_instr():
         "NodeOutputIsValid": ["IsValid"],
     }
 
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+        f'-T lib_{shader_model}',
         "-enable-16bit-types",
         "-O0"
     ]
@@ -2470,7 +2503,7 @@ def gen_texture_gather_test(dxil_inst_name, fn_name):
     return payload
 
 
-def gen_texture_gather():
+def gen_texture_gather(shader_model: str = current_shaderModel):
 
     texture_gather_to_fn_name_dict = {
         "TextureGather": [
@@ -2488,12 +2521,12 @@ def gen_texture_gather():
         "TextureGatherRaw": ["GatherRaw"],
     }
 
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+        f'-T lib_{shader_model}',
         "-enable-16bit-types",
         "-O0"
     ]
@@ -2520,13 +2553,13 @@ def gen_texture_gather():
         print_cli(texture_gather_instr_to_opcode)
     return texture_gather_instr_to_opcode
 
-def gen_spirv_shader_instr():
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+def gen_spirv_shader_instr(shader_model: str = current_shaderModel):
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     dxc_command = [
         DXC_PATH,
         "<scratchpad_placholder>",
-        "-T lib_6_8",
+       f'-T lib_{shader_model}',
         "",
         "-enable-16bit-types",
         "-spirv",
@@ -2566,7 +2599,6 @@ def gen_spirv_shader_instr():
     if (len(fail_list) > 0):
         print_cli("FAILED:")
         print_cli(fail_list)
-    #print(intrinsic_to_opcode)
     return intrinsic_to_opcode
 
 # Function to serialize the dictionary
@@ -2582,7 +2614,7 @@ def deserialize_dict(file_path):
         return pickle.load(file)
 
 def load_dict(file_name, runner=lambda: {}):
-    scratchpad_path = os.path.join(pathlib.Path().resolve(), 'scratch')
+    scratchpad_path = os.path.join(pathlib.Path().resolve(), f'scratch_{shader_model}')
     os.makedirs(scratchpad_path, exist_ok=True)
     file_path = os.path.join(scratchpad_path, file_name)
     ret_dict = {}
@@ -2592,6 +2624,37 @@ def load_dict(file_name, runner=lambda: {}):
         ret_dict = runner()
         serialize_dict(ret_dict, file_path)
     return ret_dict
+
+def per_shader_model_differ():
+    sub_dirs = [f"scratch_6_{i}" for i in range(3, 9)]  # scratch_6_3 to scratch_6_8
+    file_map = defaultdict(list)
+    for sub_dir in sub_dirs:
+        dir_path = os.path.join(pathlib.Path().resolve(), sub_dir)
+        if os.path.isdir(dir_path):
+            for file_name in os.listdir(dir_path):
+                if file_name.endswith('.ll'):
+                    file_path = os.path.join(sub_dir, file_name)
+                    file_map[file_name].append(file_path)
+    
+    shader_diff_map = {}
+
+    for file_name, paths in file_map.items():
+        if len(paths) > 1:
+            for i in range(len(paths)):
+                for j in range(i + 1, len(paths)):
+                    with open(paths[i], "r") as f1, open(paths[j], "r") as f2:
+                        shader1 = f1.read()
+                        shader2 = f2.read()
+                        diff_result =  diff_function_bodies(shader1, shader2)
+                        if diff_result:
+                            if file_name not in shader_diff_map:
+                                shader_diff_map[file_name] = []
+                            shader_diff_map[file_name].append({'file1' : paths[i], 'file2' : paths[j], 'diff' : diff_result })
+
+    print(f'# Intrinsics with Diffs: {len(shader_diff_map)}')
+    print(shader_diff_map.keys())
+    with open('diff.json', 'w') as json_file:
+        json.dump(shader_diff_map, json_file)
 
 def main():
     """ Main function used for setting up the cli"""
@@ -2611,6 +2674,13 @@ def main():
         return 0
     if args.gen_intrinsic_tests:
         run_dxc()
+        return 0
+    if args.gen_intrinsic_tests_all_sms:
+        #for sm in shader_models:
+        for i in range(3, len(shader_models)): 
+            sm = shader_models[i]
+            run_dxc(sm, True)
+        per_shader_model_differ()
         return 0
     if args.gen_spirv_intrinsic_tests:
         gen_spirv_shader_instr()

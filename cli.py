@@ -12,6 +12,7 @@ parser.add_argument('-qat, --query_all_types',  dest='query_all_types', action='
 parser.add_argument('-qad, --query_all_dxil',  dest='query_all_dxil', action='store_true', default=False)
 parser.add_argument('-qut, --query_unique_types',  dest='query_unique_types', action='store_true', default=False)
 parser.add_argument('-git, --gen_intrinsic_tests',  dest='gen_intrinsic_tests', action='store_true', default=False)
+parser.add_argument('-agitsm, --gen_intrinsic_tests_all_sms',  dest='gen_intrinsic_tests_all_sms', action='store_true', default=False)
 parser.add_argument('-gsit, --gen_spirv_intrinsic_tests',  dest='gen_spirv_intrinsic_tests', action='store_true', default=False)
 parser.add_argument('-gst, --gen_semantic_tests',  dest='gen_semantic_tests', action='store_true', default=False)
 parser.add_argument('-grt, --gen_rayquery_tests',  dest='gen_rayquery_tests', action='store_true', default=False)
