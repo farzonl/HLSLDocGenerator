@@ -61,18 +61,33 @@ def extract_all_opcodes(text):
        return matches
     return []
 
-def find_functions(function_name, text):
+def find_function_defs(function_name, text):
         # Construct the regular expression pattern dynamically
         pattern = r'\b{}\s*\(\s*([^)]*)\s*\);'.format(re.escape(function_name))
         match = re.search(pattern, text)
         return match
+
+def find_function_names(function_name, text):
+    pattern = r'\b{0}\s*\('.format(re.escape(function_name))
+    match = re.search(pattern, text)
+    return match
 
 def extract_all_hlsl_intrinsics(text):
     hlsl_intrinsics = all_hlsl_intrinsic
     found_intrinsics = []
     for intrinsic in hlsl_intrinsics:
         # note: need a better regex here
-        match = find_functions(intrinsic, text)
+        match = find_function_names(intrinsic, text)
+        if match:
+            found_intrinsics.append(intrinsic)
+    return found_intrinsics
+
+def extract_all_hlsl_alias_intrinsics(text):
+    hlsl_intrinsics = all_hlsl_intrinsic
+    found_intrinsics = []
+    for intrinsic in hlsl_intrinsics:
+        # note: need a better regex here
+        match = find_function_defs(intrinsic, text)
         if match:
             found_intrinsics.append(intrinsic)
     return found_intrinsics
@@ -107,10 +122,15 @@ def llvm_graph_hlsl_intrinsics(data=None):
 
 def llvm_git_hlsl_parser():
     llvm_path = os.path.join(pathlib.Path().resolve(), 'llvm-project')
-    hlsl_intrinsic_rel_path = 'clang/lib/Headers/hlsl/hlsl_intrinsics.h'
+    hlsl_intrinsic_rel_paths = ['clang/lib/Headers/hlsl/hlsl_intrinsics.h',
+                                'clang/lib/Headers/hlsl/hlsl_alias_intrinsics.h']
     
-    hlsl_intrinsic_files = get_git_commits(llvm_path, hlsl_intrinsic_rel_path)
-  
+    hlsl_intrinsic_files = []
+    for hlsl_intrinsic_rel_path in hlsl_intrinsic_rel_paths:
+        hlsl_intrinsic_files.extend(get_git_commits(llvm_path, hlsl_intrinsic_rel_path))
+    
+    print(hlsl_intrinsic_files)
+    
     data = [
     ['Date',  '# of Intrinsics', f"% of Intrinsics", "Intrinsics", "commit id"]
     ]
